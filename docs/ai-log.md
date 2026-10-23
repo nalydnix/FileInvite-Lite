@@ -62,8 +62,33 @@ New reusable agents are added only when this log shows a recurring need (`PLAN.m
   changed-file list before deciding what to run, and skips each half unless
   `api/FileInviteLite.sln` / `web/package.json` actually exists. Verified by running the hook
   against the current tree (exit 0) and against a sample file list.
-- **Still open:** the hook has not yet been exercised against a real failing test, because no test
-  suite exists. Confirm it blocks correctly during Phase 0b.
+- **Still open:** nothing. Closed during Phase 0b: with a deliberately failing xUnit assertion in
+  place the hook exited 2 and named the failing test, and with `stop_hook_active: true` it exited
+  0 without running anything, so it cannot loop. The temporary test was removed afterwards.
+
+### 2026-10-23 — The Stop hook reported two failures and said nothing about either
+
+- **Task / session:** Phase 0b (web scaffold), fork of the Opus 0b session, shared checkout
+- **What happened:** the hook blocked a turn with `npm run typecheck failed` and
+  `npm run test failed`, and no output under either heading. Unreadable as a report: an empty
+  failure looks like a broken test when it is just as likely a missing script or an unfinished
+  install.
+- **How it was caught:** a human asked what the failure meant, which it was not possible to answer
+  from the hook's own output.
+- **Why it happened:** the hook invoked npm with `--silent`, which suppresses npm's error text
+  entirely. Reproduced directly: `npm run <missing-script> --silent` exits 1 having written zero
+  bytes, while the same command without `--silent` prints `npm error Missing script: …`. The flag
+  was added to keep the output tidy, and it removed the only diagnostic the report had.
+- **Blast radius:** caught before commit. Cost was one blocked turn and one unanswerable question.
+- **Guardrail added:** `--silent` dropped; every failure now carries its exit code; a failure with
+  no output says so explicitly rather than printing an empty section; and the web checks are
+  skipped unless `web/node_modules/.package-lock.json` exists, so a partial install cannot be
+  reported as a code failure. Verified by reproducing both npm behaviours side by side and by
+  exercising the empty-output path against a command that exits non-zero silently.
+- **Still open:** what actually made `typecheck` and `test` fail is still unknown. Those files were
+  being written by another session in the same checkout at the time, so re-running the checks here
+  would have fought that session for the same build outputs. The next run of the hook in that
+  session will now say.
 
 ---
 
@@ -73,4 +98,5 @@ Fill this in as the log grows — three entries that rhyme are worth a rule of t
 
 | Pattern | Entries | Standing guardrail |
 |---|---|---|
-| | | |
+| A guardrail written against the repository as it *will* look, verified only for syntax, and wrong about the repository as it *is* | 2026-10-23 (×2, both the Stop hook) | Before a hook or script is committed, run it against the current tree and against a tree where the thing it inspects is missing. `bash -n` is not a test. |
+| Tool output suppressed for tidiness, removing the only diagnostic a failure had | 2026-10-23 | Never pass `--silent`, `-q` or `>/dev/null` to a command whose failure is meant to be read by someone. Report the exit code always. |

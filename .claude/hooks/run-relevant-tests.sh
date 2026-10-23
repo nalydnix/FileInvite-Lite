@@ -66,13 +66,22 @@ fi
 failures=""
 run() {
   local label="$1"; shift
-  local out
-  if ! out="$("$@" 2>&1)"; then
-    failures="${failures}
-=== ${label} failed ===
+  local out status
+  out="$("$@" 2>&1)"
+  status=$?
+  [ "$status" -eq 0 ] && return 0
+
+  # A failure with no output is worse than no report at all: it reads as a test failure when it is
+  # usually a missing script, a half-finished install, or the command not being runnable here. Say
+  # which it was, and always carry the exit code.
+  if [ -z "$(printf '%s' "$out" | tr -d '[:space:]')" ]; then
+    out="(the command produced no output)"
+  fi
+
+  failures="${failures}
+=== ${label} failed (exit ${status}) ===
 $(printf '%s' "$out" | tail -n 60)
 "
-  fi
 }
 
 if [ "$api_changed" -eq 1 ] && command -v dotnet >/dev/null 2>&1; then
@@ -89,9 +98,14 @@ if [ "$api_changed" -eq 1 ] && command -v dotnet >/dev/null 2>&1; then
   fi
 fi
 
-if [ "$web_changed" -eq 1 ] && [ -d web/node_modules ] && command -v npm >/dev/null 2>&1; then
-  run "npm run typecheck" npm --prefix web run typecheck --silent
-  run "npm run test"      npm --prefix web run test --silent
+if [ "$web_changed" -eq 1 ] && command -v npm >/dev/null 2>&1; then
+  # npm writes node_modules/.package-lock.json when an install completes, so its absence means the
+  # tree is missing or still being installed. Running tsc or vitest against a half-populated
+  # node_modules fails in ways that have nothing to do with the code.
+  if [ -f web/node_modules/.package-lock.json ]; then
+    run "npm run typecheck" npm --prefix web run typecheck
+    run "npm run test"      npm --prefix web run test
+  fi
 fi
 
 if [ -n "$failures" ]; then

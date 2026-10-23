@@ -21,6 +21,20 @@ magic link, staff approve or reject. Read `docs/spec.md` for what it must do and
 
 ## Commands
 
+From the repo root:
+
+```bash
+npm run setup     # once per clone: installs web deps, generates local secrets
+npm run dev       # API on :5080 and web on :5173 together
+npm run check     # everything CI runs: build, tests, typecheck, lint
+```
+
+`npm run setup` generates `Jwt:SigningKey` and the demo staff password into .NET user secrets and
+writes the demo sign-in to `.local/dev-credentials.txt` (gitignored). Nothing secret is committed,
+and the app refuses to start without a signing key.
+
+Individually:
+
 ```bash
 # backend
 dotnet build  api/FileInviteLite.sln
@@ -36,8 +50,6 @@ npm run test
 npm run typecheck
 npm run lint
 ```
-
-Both halves together: `npm run dev:all` from the repo root.
 
 ## Rules
 

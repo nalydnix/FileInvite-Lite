@@ -1,0 +1,133 @@
+name: CI
+
+# Runs on every PR and on main. Deploys are separate workflows (Phase 3) and run only after this
+# one is green, so this file is the single quality gate for both halves of the app.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# A new push to a PR makes the previous run irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API — build, test, scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: dotnet restore api/FileInviteLite.sln
+
+      - name: Build
+        # Warnings are errors (api/Directory.Build.props), so this fails on a warning too.
+        run: dotnet build api/FileInviteLite.sln --no-restore --configuration Release
+
+      - name: Test
+        run: >
+          dotnet test api/FileInviteLite.sln
+          --no-build --configuration Release
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory TestResults
+
+      - name: Format check
+        run: dotnet format api/FileInviteLite.sln --verify-no-changes --no-restore
+
+      - name: Vulnerability scan
+        # `dotnet list package --vulnerable` exits 0 even when it finds something, so the output
+        # has to be inspected. Transitive packages are included: most real advisories arrive that
+        # way rather than through a direct reference.
+        run: |
+          dotnet list api/FileInviteLite.sln package --vulnerable --include-transitive \
+            > vulnerabilities.txt 2>&1
+          cat vulnerabilities.txt
+          if grep -qiE '(Critical|High|Moderate|Low)$|has the following vulnerable packages' vulnerabilities.txt; then
+            echo "::error::Vulnerable NuGet packages found — see the output above."
+            exit 1
+          fi
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: TestResults/
+          if-no-files-found: ignore
+
+  web:
+    name: Web — typecheck, lint, test, scan
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Test
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Vulnerability scan
+        # Fails on high and critical only. Moderate advisories in the dev toolchain are reported
+        # but do not block: a build tool's transitive dev dependency is not a shipped risk, and a
+        # gate nobody can clear is a gate people learn to bypass.
+        run: |
+          npm audit --audit-level=high
+          npm audit --audit-level=moderate || echo "::warning::Moderate npm advisories present."
+
+  guardrails:
+    name: Guardrails
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Hook script is valid shell
+        run: bash -n .claude/hooks/run-relevant-tests.sh
+
+      - name: No secrets committed
+        # A coarse net for the obvious shapes. It is not a substitute for review, and it is not
+        # meant to be: it catches the paste that nobody meant to commit.
+        run: |
+          if git grep -nIE '(AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{22,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-[A-Za-z0-9-]{10,})' -- . ; then
+            echo "::error::Something matching a credential pattern is committed."
+            exit 1
+          fi
+          echo "No credential-shaped strings found."
+
+      - name: No signing key in configuration
+        # Jwt:SigningKey and Webhook:Secret must come from user secrets or App Service settings.
+        # A value in appsettings is committed to a public repository (ADR 0003, S8.7).
+        run: |
+          if git grep -nE '"(SigningKey|Secret)"[[:space:]]*:[[:space:]]*"[^"]+"' -- 'api/**/appsettings*.json'; then
+            echo "::error::A secret has a value in appsettings. Move it to configuration."
+            exit 1
+          fi
+          echo "No secrets in appsettings."

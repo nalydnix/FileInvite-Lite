@@ -1,0 +1,21 @@
+{
+  "name": "fileinvite-lite",
+  "private": true,
+  "description": "Root scripts so the whole prototype runs and checks with one command.",
+  "scripts": {
+    "dev": "concurrently --names api,web --prefix-colors blue,magenta \"npm:dev:api\" \"npm:dev:web\"",
+    "dev:api": "dotnet run --project api/src/FileInviteLite.Api",
+    "dev:web": "npm --prefix web run dev",
+
+    "setup": "npm --prefix web ci && node scripts/dev-setup.mjs",
+
+    "check": "npm run check:api && npm run check:web",
+    "check:api": "dotnet build api/FileInviteLite.sln --nologo && dotnet test api/FileInviteLite.sln --nologo",
+    "check:web": "npm --prefix web run typecheck && npm --prefix web run lint && npm --prefix web run test",
+
+    "db:migrate": "dotnet dotnet-ef database update --project api/src/FileInviteLite.Api"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1"
+  }
+}

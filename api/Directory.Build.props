@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- Settings shared by every project in api/. Kept here so a feature task never edits a csproj,
+       which is a sequential-task file (CLAUDE.md rule 2). -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- A warning that reaches CI is a warning nobody reads. Agents are good at producing code
+         that compiles with warnings; this makes that a build failure instead. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+    <AnalysisLevel>latest</AnalysisLevel>
+
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

@@ -315,7 +315,9 @@ web/
 ├── src/
 │   ├── main.tsx                  router assembly: collects routes from features
 │   ├── app/
-│   │   ├── AuthContext.tsx       JWT in memory, no persistence
+│   │   ├── AuthContext.tsx       AuthProvider: JWT in memory, no persistence
+│   │   ├── authState.ts          the context object, its type and the useAuth hook
+│   │   ├── RequireStaffAuth.tsx  redirects an unauthenticated visitor to /login
 │   │   ├── PortalSessionContext.tsx
 │   │   ├── apiClient.ts          fetch wrapper: base URL, bearer header, problem parsing
 │   │   └── routes.tsx            route table built from feature exports
@@ -331,8 +333,11 @@ web/
 
 Rules that mirror the backend:
 
-- **Each feature exports its own routes** from `features/<name>/routes.ts`; `app/routes.tsx`
+- **Each feature exports its own routes** from `features/<name>/routes.tsx`; `app/routes.tsx`
   imports them. Adding a page touches one feature folder plus one import line.
+- A file that exports a component exports **only** components. Hooks, contexts and constants go
+  in a sibling `.ts` file — otherwise React Fast Refresh stops working, and the lint rule
+  `react-refresh/only-export-components` fails the build.
 - A feature never imports from another feature. Shared UI goes to `components/`, shared state to
   `app/`.
 - All network calls go through `app/apiClient.ts`. No component calls `fetch` directly — that is
