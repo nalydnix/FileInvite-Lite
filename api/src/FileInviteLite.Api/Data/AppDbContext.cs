@@ -13,6 +13,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
 {
     public DbSet<StaffUser> StaffUsers => Set<StaffUser>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<DocumentRequest> DocumentRequests => Set<DocumentRequest>();
+    public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

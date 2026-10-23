@@ -34,7 +34,8 @@ else runs at the same time.
 - `api/src/FileInviteLite.Api/Features/Requests/` — `CreateRequest.cs`, `ListRequests.cs`
 - `api/src/FileInviteLite.Api/Common/Validation/` — the endpoint filter that turns FluentValidation
   failures into `ProblemResults.Validation`
-- `api/src/FileInviteLite.Api/Program.cs` — registering FluentValidation validators only
+- `api/src/FileInviteLite.Api/Program.cs` — registering FluentValidation validators only, plus one `AddUnreadableBodyHandling()` line (owner-approved widening, see Progress notes)
+- `api/src/FileInviteLite.Api/Common/Validation/UnreadableBodyHandling.cs` — turns unreadable-body errors into the shared problem shape in every environment (a Phase 0b gap found by this task's tests; owner-approved)
 - `api/src/FileInviteLite.Api/FileInviteLite.Api.csproj` — the FluentValidation package only
 - `api/src/FileInviteLite.Api/Domain/AuditEvent.cs` — adding `RequestCreated` to `AuditAction`
 - `api/tests/FileInviteLite.Api.Tests/Features/Requests/`
@@ -109,3 +110,82 @@ Cross-cutting:
 ## Progress notes
 
 (append here as you go, so a fresh session can resume without re-deriving anything)
+
+### Session 1
+
+- Read task file, spec S1/S9.5, api-contract Requests section, architecture, three CLAUDE.md files.
+- **Schema first, then tests.** Tests cannot compile without `db.DocumentRequests`, so the domain
+  entities, EF configurations, `DbSet` lines, `AuditAction.RequestCreated`, the FluentValidation
+  package and the migration `AddDocumentRequestsAndChecklistItems` went in before the red tests.
+  Endpoints were deliberately not written until the tests existed and were seen to fail.
+- Package: `FluentValidation.DependencyInjectionExtensions` 12.2.0 (brings `FluentValidation`
+  transitively; needed for `AddValidatorsFromAssembly…` so a new validator never edits Program.cs).
+- Migration is additive only (two new tables); `InitialStaffAndAudit` is untouched.
+- **Decision — `RollUpStatus(bool magicLinkIssued)`**: the spec rule needs "a magic link has been
+  issued" but `MagicLink` does not exist until a later task, so the flag is a parameter. A request
+  with no *required* items follows the owner rule S4.12 (any one approved item completes it); see Open decisions.
+  new request to be `Draft`). Spec is silent on this; flagged for the owner.
+- **Decision — overdue rule**: `DocumentRequest.IsOverdue(DateOnly today)` returns an
+  `Expression<Func<DocumentRequest,bool>>`; the list handler uses it for the SQL filter and compiles
+  the same expression once per request to compute `isOverdue` on returned rows.
+
+### Session 1 (continued) — state at hand-off
+
+- Red tests written by the `test-writer` agent (84 fail on the unmapped route, 24 pass against the
+  existing domain), then endpoints implemented. `dotnet test`: 122 pass, **2 fail** (below).
+  `dotnet format --verify-no-changes` clean; no pending model changes; frontend 23 tests, typecheck
+  and lint green.
+- Migration upgrade proven by `MigrationUpgradeTests` (applies on top of `InitialStaffAndAudit` with
+  rows present).
+- Ran the real app (`npm run dev`), signed in, empty state renders. Submitting the create form with
+  no date returned **500** — found by hand, not by the criteria.
+- security-reviewer: no Critical/High. One Medium (page offset overflow) — fixed: `page` capped at
+  `int.MaxValue / 100`, test added.
+
+**BLOCKED — scope question for the owner.** Framework body-binding errors (malformed JSON, an empty
+or unparseable `dueDate`) never reach `ValidationFilter`. In Development ASP.NET *throws*
+`BadHttpRequestException`, so `UseExceptionHandler` turns it into a **500**; outside Development it
+is a 400 in the framework's own shape (wrong `type`, no `errors`). Either way it violates the
+cross-cutting criterion "every error body matches the contract", and a user clearing the date field
+hits it. The fix is an `IExceptionHandler` (in `Common/`) mapping `BadHttpRequestException` to
+`ProblemResults.Validation(...)`, **registered with one line in `Program.cs`** — which the task's
+scope limits to FluentValidation registration. Two tests pin this:
+`Create_UnparseableDueDate_…_S10_1` and `Create_MalformedJson_…_S10_1`. Not skipped or weakened.
+
+### Open decisions / assumptions (flag in PR)
+- `sort=createdAt` is ascending (contract gives no direction).
+- `overdue=false` returns only non-overdue requests.
+- Nested validation keys are `items[0].title`; bad query values are keyed by parameter name.
+- `detail` is absent on validation errors: `ProblemResults.Validation(errors)` does not set it and
+  `Common/Results` is outside this task's scope. The contract example shows `detail`.
+- Email check is stricter than FluentValidation's `EmailAddress()` (which accepts spaces).
+- All-optional-items request: owner decided (S4.12 on main, not yet on this branch) that approving any one item completes it, even with another item still Uploaded. Implemented and pinned by tests.
+- Styling is inline/minimal because `web/src/index.css` is outside scope.
+
+### Session 1 (continued) — the unreadable-body gap, resolved
+
+- Owner approved the `Program.cs` widening (one line) and the handler under `Common/Validation/`.
+- **Development and Production genuinely differ.** Measured before the fix: Development → `500`
+  (ASP.NET throws `BadHttpRequestException`, the generic exception handler answers); Production →
+  `400` in the framework's own shape (`type` rfc9110, no `errors`) because it does not throw. A
+  handler alone would have fixed Development only. `AddUnreadableBodyHandling()` therefore also
+  sets `RouteHandlerOptions.ThrowOnBadRequest = true`, so both environments reach one handler.
+- The response is a fixed `"The request body could not be read."` keyed `body`; the framework's
+  message (which can quote the payload) goes to the log only. `UnreadableBodyTests` runs three
+  cases in both environments and asserts no parser internals or payload text in the body.
+- Status: 132 backend tests pass; `dotnet format` clean.
+
+### Session 1 (continued) — review fixes to `UnreadableBodyHandling.cs`
+
+- **Status is no longer flattened.** The handler maps on `BadHttpRequestException.StatusCode`: 400 →
+  `ProblemResults.Validation("body", …)`, 413 → `PayloadTooLarge`, 415 → `UnsupportedMediaType`
+  (defensive: a `text/plain` POST already returns a real 415 without reaching the handler), anything
+  else keeps its status with a generic problem and no `errors`.
+- **Logging no longer carries client input.** Warning logs exception type, method and path only; the
+  exception itself is logged at Debug.
+- **Coverage, stated plainly:** `UnreadableBodyHandlerTests` calls the handler directly for 400, 413,
+  415, 408 and a non-matching exception. 413 and 408 are **unit-covered only** — TestServer cannot
+  produce Kestrel's transport-level failures. An integration test pins `text/plain` → 415.
+- Verification: 138 backend tests pass (built with `--artifacts-path` because another session's
+  running instance of this branch locks `bin/`, so plain `npm run check:api` could not overwrite the
+  apphost); frontend 23 pass; `dotnet format` clean.

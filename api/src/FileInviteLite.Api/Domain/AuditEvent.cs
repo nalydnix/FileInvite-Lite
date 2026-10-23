@@ -47,4 +47,5 @@ public static class AuditAction
 {
     public const string StaffLoggedIn = nameof(StaffLoggedIn);
     public const string StaffLoginFailed = nameof(StaffLoginFailed);
+    public const string RequestCreated = nameof(RequestCreated);
 }

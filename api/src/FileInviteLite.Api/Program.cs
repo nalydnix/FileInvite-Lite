@@ -2,10 +2,12 @@ using System.Text;
 using System.Threading.RateLimiting;
 using FileInviteLite.Api.Common;
 using FileInviteLite.Api.Common.Security;
+using FileInviteLite.Api.Common.Validation;
 using FileInviteLite.Api.Data;
 using FileInviteLite.Api.Data.Seed;
 using FileInviteLite.Api.Features.Auth;
 using FileInviteLite.Api.Services.Audit;
+using FluentValidation;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Data.Sqlite;
@@ -35,6 +37,10 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Default")
                       ?? "Data Source=.local/app.db"));
+
+// One validator per endpoint, found by scan so that a new endpoint never edits this file. They
+// run through ValidationFilter<T>, which answers in the shared problem shape.
+builder.Services.AddValidatorsFromAssemblyContaining<Program>();
 
 builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 builder.Services.AddScoped<CurrentStaff>();
@@ -108,6 +114,7 @@ builder.Services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
 }));
 
 builder.Services.AddProblemDetails();
+builder.Services.AddUnreadableBodyHandling();
 
 var app = builder.Build();
 
