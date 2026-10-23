@@ -109,7 +109,7 @@ public sealed class DocumentRequestRulesTests(ApiFactory factory) : IClassFixtur
     }
 
     [Fact]
-    public void RollUp_NoRequiredItemsAndNothingTouched_IsNeverComplete()
+    public void RollUp_NoRequiredItemsAndNothingApproved_IsNotComplete()
     {
         var onlyOptional = RequestWith((false, ItemStatus.Outstanding), (false, ItemStatus.Outstanding));
         var noItems = RequestWith();
@@ -121,10 +121,29 @@ public sealed class DocumentRequestRulesTests(ApiFactory factory) : IClassFixtur
     }
 
     [Fact]
-    public void RollUp_OnlyOptionalItemsAllApproved_IsInProgressNotComplete()
+    public void RollUp_NoRequiredItemsAndOneApproved_IsComplete_OwnerDecision()
     {
-        // "All required items approved" would be vacuously true here; the rule must not read it so.
-        var request = RequestWith((false, ItemStatus.Approved), (false, ItemStatus.Approved));
+        // Owner decision (S4.12 on main): with no required items, approving any one item completes
+        // the request — even while another item is still Uploaded and unreviewed.
+        var request = RequestWith((false, ItemStatus.Approved), (false, ItemStatus.Uploaded));
+
+        Assert.Equal(RequestStatus.Complete, request.RollUpStatus(magicLinkIssued: true));
+    }
+
+    [Fact]
+    public void RollUp_NoRequiredItemsAndNoneApproved_IsInProgressOnceAnythingIsUploaded()
+    {
+        var uploaded = RequestWith((false, ItemStatus.Uploaded), (false, ItemStatus.Outstanding));
+        var rejected = RequestWith((false, ItemStatus.Rejected), (false, ItemStatus.Outstanding));
+
+        Assert.Equal(RequestStatus.InProgress, uploaded.RollUpStatus(magicLinkIssued: true));
+        Assert.Equal(RequestStatus.InProgress, rejected.RollUpStatus(magicLinkIssued: true));
+    }
+
+    [Fact]
+    public void RollUp_MixedRequest_IsUnaffectedByAnOptionalItemBeingApprovedFirst()
+    {
+        var request = RequestWith((true, ItemStatus.Outstanding), (false, ItemStatus.Approved));
 
         Assert.Equal(RequestStatus.InProgress, request.RollUpStatus(magicLinkIssued: true));
     }

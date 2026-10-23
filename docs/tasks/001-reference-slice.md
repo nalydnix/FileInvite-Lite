@@ -122,7 +122,7 @@ Cross-cutting:
 - Migration is additive only (two new tables); `InitialStaffAndAudit` is untouched.
 - **Decision — `RollUpStatus(bool magicLinkIssued)`**: the spec rule needs "a magic link has been
   issued" but `MagicLink` does not exist until a later task, so the flag is a parameter. A request
-  with no *required* items is never `Complete` (the rule is vacuously true there, and S1.5 needs a
+  with no *required* items follows the owner rule S4.12 (any one approved item completes it); see Open decisions.
   new request to be `Draft`). Spec is silent on this; flagged for the owner.
 - **Decision — overdue rule**: `DocumentRequest.IsOverdue(DateOnly today)` returns an
   `Expression<Func<DocumentRequest,bool>>`; the list handler uses it for the SQL filter and compiles
@@ -158,5 +158,5 @@ scope limits to FluentValidation registration. Two tests pin this:
 - `detail` is absent on validation errors: `ProblemResults.Validation(errors)` does not set it and
   `Common/Results` is outside this task's scope. The contract example shows `detail`.
 - Email check is stricter than FluentValidation's `EmailAddress()` (which accepts spaces).
-- All-optional-items request never becomes `Complete` (pinned by a test); owner to confirm.
+- All-optional-items request: owner decided (S4.12 on main, not yet on this branch) that approving any one item completes it, even with another item still Uploaded. Implemented and pinned by tests.
 - Styling is inline/minimal because `web/src/index.css` is outside scope.

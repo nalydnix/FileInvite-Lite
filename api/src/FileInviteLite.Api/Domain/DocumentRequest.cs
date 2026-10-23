@@ -43,9 +43,15 @@ public sealed class DocumentRequest
     {
         var required = Items.Where(i => i.Required).ToList();
 
-        // A request with no required items is never Complete: "all required items approved" is
-        // vacuously true there, and a brand-new request must start as Draft (S1.5).
-        if (required.Count > 0 && required.All(i => i.Status == ItemStatus.Approved))
+        // Two ways to finish. With required items, all of them must be approved. With none, "all
+        // required items approved" is vacuously true, so the owner's rule (S4.12) is that approving
+        // any one item completes the request — even while another is still Uploaded and unreviewed.
+        // Reading the vacuous case as Complete outright would break S1.5: a new request is Draft.
+        var complete = required.Count > 0
+            ? required.All(i => i.Status == ItemStatus.Approved)
+            : Items.Any(i => i.Status == ItemStatus.Approved);
+
+        if (complete)
         {
             return RequestStatus.Complete;
         }
