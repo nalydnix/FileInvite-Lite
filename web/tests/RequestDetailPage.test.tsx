@@ -91,6 +91,20 @@ describe('RequestDetailPage', () => {
     expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument()
   })
 
+  // A security review found the link sitting in a form control the browser may cache and restore,
+  // and that extensions read. The input must opt out, and must not carry a name the browser can
+  // key saved form data by.
+  it('keeps the link out of browser form-data caching and session restore', async () => {
+    mockApi(detail())
+    renderDetail()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Send request' }))
+
+    const input = await screen.findByLabelText('Link to send to the client')
+    expect(input).toHaveAttribute('autocomplete', 'off')
+    expect(input).not.toHaveAttribute('name')
+  })
+
   it('copies the link to the clipboard and says so', async () => {
     mockApi(detail())
     const user = userEvent.setup()

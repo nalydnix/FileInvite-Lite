@@ -145,3 +145,43 @@ Decisions and things the next person needs:
   (`RequestListPage.tsx` is not in this task's file list). The detail page is reachable at
   `/requests/{id}`. A follow-up should add the link.
 - Not verified in a real browser: the page is covered by Vitest only.
+
+### Security review findings, resolved by the orchestrator
+
+An opus security review of this branch found no Critical or High issues. It confirmed, by reading:
+32 bytes from `RandomNumberGenerator`; only the lowercase SHA-256 hex persisted; `IMagicLinkTokens`
+the single hash site in product code; one `SaveChangesAsync` for the revocations, the new link, the
+status change and all three audit events; the dev sink chosen by registration and writing nothing
+in Production; `GetRequest` matching the contract field for field with no token, URL, storage key
+or file content; and a portal session token answered `401` on both endpoints.
+
+Two Medium findings, both fixed here rather than recorded and deferred:
+
+1. **Concurrent sends could leave two live magic links.** `SendRequest` read the live links,
+   mutated them and committed with no concurrency control, so two overlapping sends each revoked
+   only what they saw and both inserted a live link — leaving a link staff believe is revoked still
+   granting access, against S1.14. The read-modify-write is now inside an explicit transaction, as
+   `api/CLAUDE.md` asks of a multi-write handler; SQLite refuses the second writer rather than
+   interleaving, so one send succeeds and the other fails loudly. Still only one
+   `SaveChangesAsync`. **Not reproduced by a test** — a deterministic test for this race needs two
+   concurrent requests against one SQLite file, which is flaky; the fix is reasoned, not pinned.
+2. **The one-shot link sat in a form control with no autofill suppression.** The URL was correctly
+   in component state only, but an `<input readOnly>` is a value browsers may cache and restore
+   across a reload and that extensions and password managers read. The input now sets
+   `autoComplete="off"` and `spellCheck={false}` and carries no `name`, pinned by a new test so it
+   cannot regress. The warning text also now says the link grants upload access and that copying
+   leaves it on the clipboard.
+
+Notes the review raised that need no change here:
+
+- **012's dual-case hash match is redundant, not a weakness.** `hash` is a deterministic SHA-256 of
+  the caller's input and `TokenHash` now has one writer, so the `|| upperHash` branch gives an
+  attacker no extra preimages. The only residual is theoretical: if both cases of one hash were
+  ever stored, `SingleOrDefaultAsync` would throw and produce a 500 distinguishable from S2.6's
+  uniform 401. Unreachable today. The cleanup — use `IMagicLinkTokens.Hash` and a single equality,
+  drop the `TODO(011)` — belongs in a sequential pass over `Features/Portal/`.
+- **`issuedAt` derivation leaks nothing**, because `ExpiresAt` is in the same response and the
+  lifetime is fixed. It can only mislead if the configured lifetime changes, which is documented;
+  the authoritative record is the `MagicLinkIssued` audit event's real `OccurredAt`.
+- **The dev sink keeps live links on disk until they expire**, with no cleanup. Intended by S1.15,
+  path gitignored, Development only.

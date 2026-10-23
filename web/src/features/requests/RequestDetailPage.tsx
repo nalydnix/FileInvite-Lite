@@ -166,12 +166,21 @@ export function RequestDetailPage() {
           <div role="region" aria-label="New client link">
             <p>
               <strong>This link will not be shown again.</strong> Copy it now and send it to the
-              client. If you lose it, send the request again to get a new one.
+              client. If you lose it, send the request again to get a new one. Anyone with the link
+              can upload to this request, and copying it leaves it on your clipboard.
             </p>
             <label htmlFor="magic-link">Link to send to the client</label>
+            {/*
+              Credential-grade data in a form control is a value the browser may cache and restore
+              across a reload (session restore, form-data caching) and that extensions and password
+              managers read. autoComplete="off" and the name-less input keep it out of all three;
+              the link still lives only in component state, never in storage or a cookie (S9.4).
+            */}
             <input
               id="magic-link"
               readOnly
+              autoComplete="off"
+              spellCheck={false}
               value={issued.url}
               onFocus={(e) => e.target.select()}
             />

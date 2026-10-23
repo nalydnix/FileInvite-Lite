@@ -61,6 +61,15 @@ public sealed class SendRequest : IEndpoint
         var expiresAt = now.AddDays(portal.Value.MagicLinkLifetimeDays);
         var issued = tokens.Generate();
 
+        // Revoking the live links is a read-modify-write, so the read belongs inside a transaction
+        // with the write. Without one, two overlapping sends each read the live set before the
+        // other commits, each revokes only what it saw, and both insert a live link — leaving a
+        // link the caller believes is revoked still granting access, against S1.14. SQLite refuses
+        // the second writer rather than interleaving, which is the outcome we want: one send
+        // succeeds and the other fails loudly. api/CLAUDE.md asks a multi-write handler to wrap its
+        // work this way.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
         // Everything below is tracked and then committed by the one SaveChangesAsync: the revoked
         // links, the new link, the status change and every audit event (S1.13, S1.14).
         var previous = await db.MagicLinks
@@ -87,6 +96,7 @@ public sealed class SendRequest : IEndpoint
                   nameof(MagicLink), link.Id, new { requestId = request.Id, expiresAt });
 
         await db.SaveChangesAsync(ct);          // links + status + audit events: one transaction
+        await tx.CommitAsync(ct);
 
         // The fragment keeps the token out of every server log and Referer header (ADR 0004).
         var url = $"{portal.Value.BaseUrl.TrimEnd('/')}/portal#t={issued.Token}";
