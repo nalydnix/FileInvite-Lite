@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------------------
+# Client data and secrets — the entries that actually matter
+# ---------------------------------------------------------------------------
+# The dev email sink contains magic links (PLAN.md §4). The storage root contains uploaded client
+# documents. Neither may ever reach the repository. These are ignored before the app exists, so a
+# first run cannot commit them by accident. Phase 0b pins the exact paths in configuration; keep
+# them inside one of the folders below.
+.local/
+**/.local/
+dev-sink/
+**/dev-sink/
+uploads/
+**/uploads/
+
+# SQLite database and its journals.
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Local configuration and secrets. User secrets live outside the repo by design; these patterns
+# are a backstop against a stray file.
+*.local.json
+appsettings.*.Local.json
+.env
+.env.*
+!.env.example
+*.pfx
+*.p12
+*.pem
+*.key
+
+# ---------------------------------------------------------------------------
+# .NET
+# ---------------------------------------------------------------------------
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+artifacts/
+*.user
+*.suo
+*.userprefs
+.vs/
+TestResults/
+coverage*.xml
+coverage*.json
+*.coverage
+BenchmarkDotNet.Artifacts/
+
+# ---------------------------------------------------------------------------
+# Node / Vite
+# ---------------------------------------------------------------------------
+node_modules/
+dist/
+dist-ssr/
+.vite/
+*.tsbuildinfo
+coverage/
+.vercel/
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------------------------------------------------------------------------
+# Editors and OS
+# ---------------------------------------------------------------------------
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---------------------------------------------------------------------------
+# Claude Code
+# ---------------------------------------------------------------------------
+# .claude/settings.json and .claude/agents/ are committed on purpose — they are the guardrails.
+# Personal overrides are not.
+.claude/settings.local.json

@@ -1,0 +1,29 @@
+# Normalise line endings in the repository to LF, and check out LF everywhere.
+#
+# This matters here specifically: `core.autocrlf` is true on at least one dev machine, which would
+# hand `.claude/hooks/run-relevant-tests.sh` a CRLF working copy on the next checkout. Bash reads
+# the trailing \r as part of the command and the hook dies with `$'\r': command not found` — on
+# Windows locally and in GitHub Actions alike.
+* text=auto eol=lf
+
+# Scripts that must be LF regardless of platform.
+*.sh        text eol=lf
+*.bash      text eol=lf
+
+# Windows-native files that want CRLF.
+*.sln       text eol=crlf
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+*.ps1       text eol=crlf
+
+# Binaries: never touched.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.pdf       binary
+*.docx      binary
+*.xlsx      binary
+*.ico       binary
+*.woff      binary
+*.woff2     binary
+*.db        binary
