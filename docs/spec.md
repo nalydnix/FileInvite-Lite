@@ -29,7 +29,8 @@ this document wins from Phase 1 onwards.
 
 The request status is derived on write, never set by hand:
 
-- All required items `Approved` → `Complete`.
+- The request has at least one required item, and all of them are `Approved` → `Complete`.
+- The request has no required items, and at least one item is `Approved` → `Complete`.
 - Otherwise, at least one item not `Outstanding` → `InProgress`.
 - Otherwise, a magic link has been issued → `Sent`.
 - Otherwise → `Draft`.
@@ -196,6 +197,17 @@ event in the same transaction as the item status change.
 **S4.10** Optional items still `Outstanding` do not prevent completion.
 
 **S4.11** Approving an already-`Approved` item returns `409`.
+
+**S4.12** A request whose items are **all optional** becomes `Complete` as soon as staff approve
+any one of them. The remaining optional items do not have to be resolved.
+
+This is the "send me whatever you have" case: one accepted document is enough, and without the
+rule such a request could never complete, because "all required items approved" is vacuously true
+the moment it is created and so cannot be used as the trigger.
+
+Consequence to be aware of: an all-optional request can reach `Complete` — and therefore fire the
+completion webhook (S7.1) — while another item is still `Uploaded` and awaiting review. That is
+intended. A test pins it so the behaviour is visible rather than incidental.
 
 ---
 
