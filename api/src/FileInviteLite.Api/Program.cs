@@ -79,6 +79,32 @@ builder.Services.AddAuthorizationBuilder()
         .AddAuthenticationSchemes(AuthPolicies.Schemes.StaffJwt)
         .RequireAuthenticatedUser());
 
+// Portal (task 012): its own scheme and policy, the services behind uploads, and the exchange limit.
+builder.Services.AddAuthentication()
+    .AddScheme<Microsoft.AspNetCore.Authentication.AuthenticationSchemeOptions, PortalSessionHandler>(
+        AuthPolicies.Schemes.PortalSession, null);
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(AuthPolicies.Portal, policy => policy
+        .AddAuthenticationSchemes(AuthPolicies.Schemes.PortalSession)
+        .RequireAuthenticatedUser()
+        .RequireClaim(PortalSession.RequestIdClaim));
+builder.Services.AddSingleton<FileInviteLite.Api.Services.Storage.IFileStorage, FileInviteLite.Api.Services.Storage.LocalDiskFileStorage>();
+builder.Services.AddSingleton<FileInviteLite.Api.Services.Files.IContentSniffer, FileInviteLite.Api.Services.Files.MagicByteContentSniffer>();
+builder.Services.AddScoped<CurrentPortal>();
+builder.Services.AddRateLimiter(options => options.AddPolicy(
+    FileInviteLite.Api.Features.Portal.ExchangeToken.RateLimitPolicy,
+    context =>
+    {
+        PortalSession.ApplyResponseHeaders(context.Response);   // a 429 is a portal response too (S2.12)
+        return RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = builder.Configuration.GetValue("RateLimits:ExchangePermitLimit", 10),
+                Window = TimeSpan.FromMinutes(1),
+            });
+    }));
+
 // ---------------------------------------------------------------------------------------------
 // Rate limiting (S8.4, S2.10)
 // ---------------------------------------------------------------------------------------------

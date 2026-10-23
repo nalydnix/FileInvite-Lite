@@ -103,3 +103,60 @@ resolved** — this task does not merge on an unreviewed branch.
 ## Progress notes
 
 (append here as you go)
+
+### Implementation notes (task 012 agent)
+
+**Done.** Three endpoints (`ExchangeToken`, `GetPortalRequest`, `UploadFile`), the `PortalSession`
+scheme, `CurrentPortal`, `IFileStorage`/`LocalDiskFileStorage`, `IContentSniffer`/
+`MagicByteContentSniffer`, one contiguous registration block in `Program.cs`, and tests under
+`api/tests/.../Features/Portal/` plus `Infrastructure/LogCapture.cs`. No migration, no csproj, no
+`AppDbContext`, no `web/**`.
+
+**Stateless-portal-session trade-off (state this in the PR).** The portal session is a signed JWT
+(issuer and audience `fileinvite-lite-portal`, 30 minutes, claim `request_id`), signed with the
+existing `Jwt:SigningKey`. There is no session table, so a session cannot be revoked early: revoking
+the magic link stops *new* exchanges but a session already issued stays valid until it expires (at
+most 30 minutes). Accepted because the lifetime is short and the link itself is revocable. The staff
+and portal tokens share a signing key and are kept apart by issuer/audience validation in each scheme
+and by the header word (`Bearer` vs `Portal`); `PortalSessionHandler` ignores any header that is not
+`Portal <token>` and `JwtBearer` ignores `Portal`. If `Jwt:Issuer`/`Jwt:Audience` were ever configured
+to `fileinvite-lite-portal`, that separation would collapse; nothing validates against it today.
+
+**Hand-offs and things other tasks must know**
+- **011 owns the shared token service.** `ExchangeToken` hashes inline with SHA-256
+  (`Convert.ToHexStringLower`, 64 hex chars) because `IMagicLinkTokens` does not exist yet. Refactor
+  it onto `IMagicLinkTokens.Hash` once 011 lands. Until then the lookup matches the lower- *or*
+  upper-case hex form, since ADR 0004 / task 010 say "hex" without a case; 011 should pick one and
+  the dual match can go.
+- **`Infrastructure/LogCapture.cs`** was created here (011 is also told to build it if absent). If 011
+  has its own copy there will be a merge conflict on that file; keep one.
+- **`IFileStorage.DiscardAsync` is an addition to the ADR 0005 interface.** Needed because a blob is
+  written before it can be sniffed (DOCX/XLSX need the whole ZIP) and before the commit, so a refused
+  or failed upload has to remove it. It is documented as rollback-only. ADR 0005's interface listing
+  does not mention it.
+- **`rejectionComment`** is in the response shape but is always omitted: there is no storage for it
+  until the phase 2 schema (`ReviewDecision.Comment`, task 020). The S3.2 "only on Rejected items"
+  clause is therefore proven only in the negative (non-rejected items never carry the field). 021/022
+  must populate it from the latest rejection and add a positive test.
+- **Item order** in `GET /api/portal/request` is whatever the database returns (effectively by item
+  id, i.e. random), because `ChecklistItem` has no sort column. A schema task should add one.
+- **No `Location` header on the 201** from the upload: the only candidate URL would be a file route,
+  and S3.14 says there is none. The contract says "Location header set" for 201s generally.
+- **Config key** `RateLimits:ExchangePermitLimit` (default 10 in code, as the login limit is read);
+  `appsettings.json` is outside this task's scope so it is not listed there.
+- `Program.cs` still carries a comment above the staff registration saying the portal scheme arrives
+  "with the Phase 1 portal task"; left untouched to keep the edit to one block.
+- Rate limiting partitions by `RemoteIpAddress`. Behind App Service without forwarded-headers
+  handling that is the proxy's address, the same as the login limit. Not addressed here.
+
+**Known race, not closed.** The Approved check (409) happens before the body is streamed, and a
+staff approval could land between that check and the commit. The upload would then flip an Approved
+item back to Uploaded. Closing it needs a concurrency token on `ChecklistItem` (schema task) or a
+conditional UPDATE; there is no approve endpoint yet (021).
+
+**Verified**
+- `dotnet build api/FileInviteLite.sln` clean, 0 warnings.
+- `dotnet test api/FileInviteLite.sln`: 250 passed (149 existing + 101 new). Mutation checks: removing
+  the request-id scope in `UploadFile` fails three S2.9 tests; removing the 20 MB count fails S3.7.
+- `dotnet format api/FileInviteLite.sln --verify-no-changes` clean.
+- Not run: frontend checks (no `web/**` change).
