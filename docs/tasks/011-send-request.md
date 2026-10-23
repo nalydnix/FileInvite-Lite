@@ -106,3 +106,42 @@ orchestrator after 010 merged, not by an agent widening its own scope.
 ## Progress notes
 
 (append here as you go)
+
+### Task 011 — implementation notes
+
+Done: `SendRequest.cs`, `GetRequest.cs`, `IMagicLinkTokens`/`MagicLinkTokens`, `IEmailSender` +
+`DevSinkEmailSender` (Development only) + `NoOpEmailSender` (everywhere else), `PortalOptions`
+(validated at startup), `RequestDetailPage.tsx` and its route. 40 new backend tests, 6 new frontend
+tests.
+
+Decisions and things the next person needs:
+
+- **Token hash is lowercase hex**, decided in `MagicLinkTokens.Hash` (ADR 0004 only says "hex").
+  **Follow-up for task 012's owner:** the dual-case match and the `TODO(011)` in
+  `Features/Portal/ExchangeToken.cs` are now redundant. Replace the inline SHA-256 with
+  `IMagicLinkTokens.Hash` and match on one value. Not edited here: outside this task's scope.
+  (`PortalTestKit.HashToken` already uses lowercase.)
+- **`issuedAt` is derived**: `ExpiresAt` minus `Portal:MagicLinkLifetimeDays`. If the lifetime
+  setting is changed, links issued before the change report a shifted `issuedAt`; `expiresAt` is
+  always exact. No column was added (the schema is closed).
+- **"Newest link"**: live (unrevoked) first, then latest `ExpiresAt`. Re-sending revokes every
+  earlier link, so there is at most one live link and it is the newest, even if the lifetime was
+  shortened between sends.
+- **Order of `items`** in `GetRequest` is unspecified in the contract and `ChecklistItem` has no
+  position column; it matches `GetPortalRequest` (no explicit `OrderBy`, so storage order).
+- **Ids are bound as `string`** on both endpoints and parsed in the handler, so a non-GUID id is a
+  404 after authorisation, not a routing 404 that would make an unauthenticated caller see 404
+  instead of 401 (S1.7).
+- **Email failure after commit** is caught and logged by exception type only; the link is already
+  issued and is returned to the caller, so a broken sink does not become a 500.
+- `MagicLinkEmail` and `IssuedToken` override `ToString` so the credential cannot be printed by
+  accident.
+- `Program.cs`: one registration block (options, tokens, email by environment) and the stale
+  "arrives with the Phase 1 portal task" comment corrected.
+- Existing test touched: `web/tests/CreateRequestPage.test.tsx` asserted the exact list of request
+  routes; the expectation gained `'/requests/:id'` (required by wiring the detail page). Nothing
+  was weakened.
+- Not done (out of scope): `RequestListPage` rows do not link to the new detail page
+  (`RequestListPage.tsx` is not in this task's file list). The detail page is reachable at
+  `/requests/{id}`. A follow-up should add the link.
+- Not verified in a real browser: the page is covered by Vitest only.

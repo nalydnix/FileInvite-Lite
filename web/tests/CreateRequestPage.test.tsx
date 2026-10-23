@@ -36,7 +36,11 @@ describe('CreateRequestPage', () => {
   })
 
   it('exports the create and list routes behind staff auth', () => {
-    expect(requestRoutes.map((r) => r.path)).toEqual(['/requests', '/requests/new'])
+    expect(requestRoutes.map((r) => r.path)).toEqual([
+      '/requests',
+      '/requests/new',
+      '/requests/:id',
+    ])
   })
 
   it('creates a request and shows it in the list (S9.5)', async () => {

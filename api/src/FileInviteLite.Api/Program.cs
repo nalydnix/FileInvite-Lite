@@ -46,11 +46,31 @@ builder.Services.AddScoped<IAuditWriter, AuditWriter>();
 builder.Services.AddScoped<CurrentStaff>();
 builder.Services.AddSingleton<JwtTokenIssuer>();
 
+// Magic links and the email that carries them (task 011). The sender is chosen here, by
+// environment: the dev sink writes the link to a folder and exists only in Development, so no
+// other environment can write one by accident; everywhere else nothing is sent.
+builder.Services
+    .AddOptions<PortalOptions>()
+    .Bind(builder.Configuration.GetSection(PortalOptions.SectionName))
+    .ValidateDataAnnotations()
+    .Validate(o => PortalOptions.IsAbsoluteHttpUrl(o.BaseUrl),
+              "Portal:BaseUrl must be an absolute http or https URL, e.g. https://app.example.com.")
+    .ValidateOnStart();
+builder.Services.AddSingleton<FileInviteLite.Api.Services.Tokens.IMagicLinkTokens, FileInviteLite.Api.Services.Tokens.MagicLinkTokens>();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSingleton<FileInviteLite.Api.Services.Email.IEmailSender, FileInviteLite.Api.Services.Email.DevSinkEmailSender>();
+}
+else
+{
+    builder.Services.AddSingleton<FileInviteLite.Api.Services.Email.IEmailSender, FileInviteLite.Api.Services.Email.NoOpEmailSender>();
+}
+
 // ---------------------------------------------------------------------------------------------
 // Authentication and authorisation
 // ---------------------------------------------------------------------------------------------
-// Two schemes that never substitute for one another. The portal scheme and policy arrive with the
-// Phase 1 portal task; staff endpoints must not be widened to cover clients in the meantime.
+// Two schemes that never substitute for one another: the staff JWT here, and the portal session
+// registered just below. Staff endpoints must not be widened to cover clients.
 builder.Services
     .AddAuthentication(AuthPolicies.Schemes.StaffJwt)
     .AddJwtBearer(AuthPolicies.Schemes.StaffJwt, options =>
