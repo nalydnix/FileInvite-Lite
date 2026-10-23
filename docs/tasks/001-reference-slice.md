@@ -109,3 +109,21 @@ Cross-cutting:
 ## Progress notes
 
 (append here as you go, so a fresh session can resume without re-deriving anything)
+
+### Session 1
+
+- Read task file, spec S1/S9.5, api-contract Requests section, architecture, three CLAUDE.md files.
+- **Schema first, then tests.** Tests cannot compile without `db.DocumentRequests`, so the domain
+  entities, EF configurations, `DbSet` lines, `AuditAction.RequestCreated`, the FluentValidation
+  package and the migration `AddDocumentRequestsAndChecklistItems` went in before the red tests.
+  Endpoints were deliberately not written until the tests existed and were seen to fail.
+- Package: `FluentValidation.DependencyInjectionExtensions` 12.2.0 (brings `FluentValidation`
+  transitively; needed for `AddValidatorsFromAssembly…` so a new validator never edits Program.cs).
+- Migration is additive only (two new tables); `InitialStaffAndAudit` is untouched.
+- **Decision — `RollUpStatus(bool magicLinkIssued)`**: the spec rule needs "a magic link has been
+  issued" but `MagicLink` does not exist until a later task, so the flag is a parameter. A request
+  with no *required* items is never `Complete` (the rule is vacuously true there, and S1.5 needs a
+  new request to be `Draft`). Spec is silent on this; flagged for the owner.
+- **Decision — overdue rule**: `DocumentRequest.IsOverdue(DateOnly today)` returns an
+  `Expression<Func<DocumentRequest,bool>>`; the list handler uses it for the SQL filter and compiles
+  the same expression once per request to compute `isOverdue` on returned rows.
