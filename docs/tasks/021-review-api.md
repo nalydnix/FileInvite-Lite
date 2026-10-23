@@ -98,3 +98,64 @@ resolved.
 ## Progress notes
 
 (append here as you go)
+
+### Task 021 — implemented
+- Added `Features/Review/{DownloadFile,ApproveItem,RejectItem}.cs` plus `ReviewDecisionWriter.cs`
+  (shared decision/roll-up/commit logic and the webhook payload hash, kept inside the feature
+  folder so approve and reject cannot drift). Tests in `Tests/Features/Review/`. No `Program.cs`,
+  `AppDbContext`, migration or other forbidden file touched; no registration needed.
+- `RollUpStatus` is called, never restated. `RequestCompleted` (and the webhook) fire only on the
+  transition into `Complete`, not when a later approval finds it already `Complete` (S4.12).
+- Download opens the blob first (missing blob => 404, no audit, key never logged), then commits
+  `FileDownloaded`, then streams. `DiscardAsync` is not used.
+- Decision calls: rejecting an `Approved` item returns 409 (not in the task file; chosen so a
+  rejection cannot silently un-complete a request whose webhook may have gone out). Needs owner
+  confirmation. Approve requires a JSON body (`{}`), because the shared `ValidationFilter` needs one.
+- **FLAG FOR TASK 025:** `PayloadHash` is SHA-256 of JSON this task serialises (`CompletionPayload`).
+  025 must produce byte-identical JSON or the hash is meaningless: `JsonSerializerDefaults.Web`
+  (camelCase), compact, UTF-8, properties in contract order (`event, requestId, clientName,
+  clientEmail, completedAt, items[id,title,required,outcome]`), items ordered by `id` ascending,
+  `outcome` = item status name, `completedAt` = the completing `ReviewDecision.ReviewedAt` truncated
+  to whole seconds (UTC). Items' state is as of completion; a later change would alter a recomputed hash.
+
+### Security review findings, resolved by the orchestrator
+
+An opus review of this branch found no Critical issues and **one High**, now fixed, plus follow-ups
+that need a sequential task.
+
+**High, fixed here: a non-HTTPS webhook URL could reach a stored `WebhookDelivery.Url`.** The only
+guard was `IsNullOrWhiteSpace`, so `http://internal-host/x`, `file:///…`, a relative path, a
+padded value or plain junk would have been persisted and later posted to — carrying the client's
+name and email in cleartext. S7.7 and `PLAN.md` §4 require HTTPS and nothing in the repository
+enforced it (task 025's validated options class exists on another branch and is not registered).
+`DeliverableUrlOrNull` now requires an absolute HTTPS URI and returns the trimmed form; anything
+else is treated as "not configured", so completion still succeeds with no row and no
+`WebhookQueued`. Eight new tests cover `http://`, `http://localhost`, `file:///`, `ftp://`, a
+scheme-less value, a relative path, junk, and a padded HTTPS URL stored trimmed. The URL is
+deliberately not logged on refusal, so configuration detail stays out of the logs; the symptom is a
+request that completes with no delivery queued.
+
+**Documented here, since the contract and spec are sequential files this task could not touch:**
+the `409` on rejecting an already-`Approved` item is now in `docs/api-contract.md` and as an
+extension to S4.11 in `docs/spec.md`, with the reasoning — an approval is final because undoing one
+would contradict a delivered completion webhook that S7 cannot retract, and would let a
+re-approval fire completion twice. The cost, no undo for a mistaken approval, is recorded as
+intended rather than left as an accident.
+
+**Still open, needing a sequential task (orchestrator's list):**
+
+1. **Duplicate completion under concurrency.** `wasComplete` is read from the loaded entity and the
+   "first transition into Complete" decision is made in memory, with no row version on
+   `DocumentRequest` and no unique index on `WebhookDeliveries(RequestId)`. Two staff approving the
+   last two required items simultaneously can both see an incomplete request and each write a
+   `RequestCompleted` and a delivery row. Needs a concurrency token or a unique index — both
+   schema changes.
+2. **Payload duplication with task 025.** `CompletionPayload` here and `WebhookPayload` in 025's
+   `Services/Webhooks/` are two definitions of the same body, and they **do not currently agree**:
+   this one orders items by id and truncates `completedAt` to whole seconds, while 025 orders by
+   title then id at full precision. `PayloadHash` would therefore never match 025's bytes. The fix
+   is to delete this copy and have Review use 025's record, per `docs/architecture.md` §3.
+3. **`ReviewDecisionWriter.cs`** is a shared `internal static` helper inside `Features/Review/`,
+   which breaks no layering rule (no feature folder reaches into another) but is not in the
+   documented file list. Worth a line in `architecture.md` in a doc pass; keeping a six-write
+   transaction in one place beat duplicating it, given `Services/**` was out of scope.

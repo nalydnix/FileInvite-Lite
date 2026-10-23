@@ -352,8 +352,19 @@ Request:
 
 `200`: same shape as approve, with `"itemStatus": "Rejected"`.
 
-Errors: `400` missing or whitespace comment · `401` · `404` · `409` no uploaded file.
+Errors: `400` missing or whitespace comment · `401` · `404` · `409` no uploaded file (S4.7), or the
+item is already `Approved`.
 Audit: `ItemRejected`.
+
+**Rejecting an already-`Approved` item is refused, and an approval cannot be undone.** Flipping a
+required item back from `Approved` would drop its request out of `Complete` after the completion
+webhook had been queued and probably delivered — and the contract has no `request.reopened` event
+and never retracts a `WebhookDelivery`, so the receiving system would stay wrong with nothing able
+to correct it. Worse, a later re-approval would see an incomplete request again and write a second
+`RequestCompleted` and a second delivery for the same request, making completion a repeatable
+event. The MVP therefore has no undo for a mistaken approval; a reviewer who needs one has to
+create a new request. Adding undo is a feature, not a loosened check: it needs a `request.reopened`
+event, a decision on whether completion may re-fire, and an audit action to match.
 
 ---
 

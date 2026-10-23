@@ -196,7 +196,16 @@ event in the same transaction as the item status change.
 
 **S4.10** Optional items still `Outstanding` do not prevent completion.
 
-**S4.11** Approving an already-`Approved` item returns `409`.
+**S4.11** Approving an already-`Approved` item returns `409`. **Rejecting** one returns `409` too:
+an approval is final in the MVP.
+
+This was not in the original criteria and is recorded here because it is a decision, not an
+accident of implementation order. An `Approved` required item flipped to `Rejected` drops its
+request out of `Complete` after the completion webhook has been queued and probably delivered,
+and S7 has no event that retracts it — so the receiver would stay permanently wrong. A later
+re-approval would then write a second `RequestCompleted` and a second `WebhookDelivery` for the
+same request, which contradicts S6.1's one-event-per-state-change. The cost is that there is no
+undo for a mistaken approval. Undo is a feature for later, not a relaxed guard.
 
 **S4.12** A request whose items are **all optional** becomes `Complete` as soon as staff approve
 any one of them. The remaining optional items do not have to be resolved.
