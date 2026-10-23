@@ -1,4 +1,5 @@
 import { Navigate, type RouteObject } from 'react-router-dom'
+import { auditRoutes } from '../features/audit/routes'
 import { authRoutes } from '../features/auth/routes'
 import { portalRoutes } from '../features/portal/routes'
 import { requestRoutes } from '../features/requests/routes'
@@ -14,6 +15,7 @@ export const routes: RouteObject[] = [
 
   ...authRoutes,
   ...requestRoutes,
+  ...auditRoutes,
   ...portalRoutes,
 
   { path: '*', element: <main className="page"><h1>Not found</h1></main> },

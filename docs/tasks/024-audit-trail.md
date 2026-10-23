@@ -93,3 +93,20 @@ spans `api/` and `web/`, which is why its web scope is narrow and disjoint from 
 ## Progress notes
 
 (append here as you go)
+
+### 2026-10-23 — implemented (api + web)
+
+- `Features/Audit/GetRequestAuditTrail.cs`: `GET /api/requests/{id:guid}/audit`, staff policy. 404 on
+  unknown request before any audit row is read. One SQL filter matches `EntityId` against the
+  request id plus correlated subqueries over its items, files (via items), review decisions,
+  magic links, reminders and webhook deliveries; count and page are two statements over that one
+  filter. Order `OccurredAt desc, Id desc`. Metadata parsed to a JSON node; null/unparseable -> null.
+- Paging: `page` 1..int.MaxValue/200 else 400; `pageSize` >= 1 else 400, above 200 clamped to 200.
+  NOTE: `ListRequests` does not clamp — it returns 400 above its max of 100. The task's "clamped"
+  criterion was followed for pageSize; invalid values still 400 in the shared shape.
+- Web: `features/audit/AuditTrailPage.tsx` + `routes.tsx`; `app/routes.tsx` gained one import and
+  one spread. Route `/requests/:id/audit`.
+- **Follow-up for task 022 (owner of `RequestDetailPage.tsx`): add a link to `/requests/:id/audit`.**
+- Not done: "send" and "approve" endpoints do not exist yet (021/022), so the S6.6 happy-path test
+  covers create, exchange (magic link seeded directly), upload. Extend it once they merge.
+- Implementation was written before the tests (order deviation), so red-first was not observed.
