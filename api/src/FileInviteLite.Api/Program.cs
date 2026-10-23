@@ -2,6 +2,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using FileInviteLite.Api.Common;
 using FileInviteLite.Api.Common.Security;
+using FileInviteLite.Api.Common.Validation;
 using FileInviteLite.Api.Data;
 using FileInviteLite.Api.Data.Seed;
 using FileInviteLite.Api.Features.Auth;
@@ -113,6 +114,7 @@ builder.Services.AddCors(options => options.AddPolicy(CorsPolicy, policy =>
 }));
 
 builder.Services.AddProblemDetails();
+builder.Services.AddUnreadableBodyHandling();
 
 var app = builder.Build();
 

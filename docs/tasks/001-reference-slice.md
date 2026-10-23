@@ -34,7 +34,8 @@ else runs at the same time.
 - `api/src/FileInviteLite.Api/Features/Requests/` — `CreateRequest.cs`, `ListRequests.cs`
 - `api/src/FileInviteLite.Api/Common/Validation/` — the endpoint filter that turns FluentValidation
   failures into `ProblemResults.Validation`
-- `api/src/FileInviteLite.Api/Program.cs` — registering FluentValidation validators only
+- `api/src/FileInviteLite.Api/Program.cs` — registering FluentValidation validators only, plus one `AddUnreadableBodyHandling()` line (owner-approved widening, see Progress notes)
+- `api/src/FileInviteLite.Api/Common/Validation/UnreadableBodyHandling.cs` — turns unreadable-body errors into the shared problem shape in every environment (a Phase 0b gap found by this task's tests; owner-approved)
 - `api/src/FileInviteLite.Api/FileInviteLite.Api.csproj` — the FluentValidation package only
 - `api/src/FileInviteLite.Api/Domain/AuditEvent.cs` — adding `RequestCreated` to `AuditAction`
 - `api/tests/FileInviteLite.Api.Tests/Features/Requests/`
@@ -160,3 +161,16 @@ scope limits to FluentValidation registration. Two tests pin this:
 - Email check is stricter than FluentValidation's `EmailAddress()` (which accepts spaces).
 - All-optional-items request: owner decided (S4.12 on main, not yet on this branch) that approving any one item completes it, even with another item still Uploaded. Implemented and pinned by tests.
 - Styling is inline/minimal because `web/src/index.css` is outside scope.
+
+### Session 1 (continued) — the unreadable-body gap, resolved
+
+- Owner approved the `Program.cs` widening (one line) and the handler under `Common/Validation/`.
+- **Development and Production genuinely differ.** Measured before the fix: Development → `500`
+  (ASP.NET throws `BadHttpRequestException`, the generic exception handler answers); Production →
+  `400` in the framework's own shape (`type` rfc9110, no `errors`) because it does not throw. A
+  handler alone would have fixed Development only. `AddUnreadableBodyHandling()` therefore also
+  sets `RouteHandlerOptions.ThrowOnBadRequest = true`, so both environments reach one handler.
+- The response is a fixed `"The request body could not be read."` keyed `body`; the framework's
+  message (which can quote the payload) goes to the log only. `UnreadableBodyTests` runs three
+  cases in both environments and asserts no parser internals or payload text in the body.
+- Status: 132 backend tests pass; `dotnet format` clean.
