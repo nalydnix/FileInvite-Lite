@@ -3,18 +3,28 @@
 
 ## Goal
 `POST /api/requests/{id}/send` issues a magic link, moves the request to `Sent`, and returns the
-link once.
+link once — and `GET /api/requests/{id}` reads a request back without ever showing the link again.
+
+## `GetRequest.cs` is part of this task
+
+`GET /api/requests/{id}` is in the contract and in the spec (S1.10), but Phase 0c built only
+`CreateRequest` and `ListRequests`, and no Phase 1 task file claimed it. This task's own criteria
+(S1.12) are untestable without it — "no later read returns the token" needs a later read to
+exist — so it belongs here, in the feature folder this task already owns. Added by the
+orchestrator after 010 merged, not by an agent widening its own scope.
 
 ## Scope
 
 **May touch**
 - `api/src/FileInviteLite.Api/Features/Requests/SendRequest.cs`
+- `api/src/FileInviteLite.Api/Features/Requests/GetRequest.cs`
 - `api/src/FileInviteLite.Api/Services/Tokens/` — `IMagicLinkTokens` + implementation
 - `api/src/FileInviteLite.Api/Services/Email/` — `IEmailSender`, `DevSinkEmailSender`,
   `NoOpEmailSender`
 - `api/src/FileInviteLite.Api/Common/Security/PortalOptions.cs` — link lifetime and base URL
 - `api/src/FileInviteLite.Api/Program.cs` — **registration lines only** for the services above
-- `api/tests/FileInviteLite.Api.Tests/Features/Requests/SendRequestTests.cs`
+- `api/tests/FileInviteLite.Api.Tests/Features/Requests/SendRequestTests.cs`,
+  `GetRequestTests.cs`
 - `web/src/features/requests/RequestDetailPage.tsx` and that feature's `routes.tsx` — the page
   that shows the link and a copy button
 
@@ -63,6 +73,26 @@ link once.
       — `api/CLAUDE.md` already promises it
 - [ ] The staff UI shows the returned link once with a copy control, and says plainly that it will
       not be shown again
+
+`GetRequest`:
+- [ ] **S1.10** `GET /api/requests/{id}` returns the request with its items, their statuses and the
+      uploaded file metadata per item — **never file contents**, and never a storage key
+- [ ] The response matches `docs/api-contract.md` §`GET /api/requests/{id}` field for field,
+      including `createdBy`, `isOverdue`, `latestFile` and `latestDecision`. `ReviewDecision` does
+      not exist until Phase 2, so `latestDecision` is always `null` for now — keep the field in the
+      shape rather than omitting it, so the contract holds and 021 only has to populate it
+- [ ] `magicLink` is `null` before the request is sent, and afterwards carries `issuedAt`,
+      `expiresAt` and `revoked` and nothing else (S1.12). `issuedAt` is not a column on `MagicLink`
+      — derive it from `ExpiresAt` minus the configured lifetime, or state in Progress notes why
+      you could not, rather than adding a column (the schema is 010's and is closed)
+- [ ] The newest magic link is the one reported, when a request has been sent more than once
+- [ ] `latestFile` is the most recent upload per item (S3.13), `null` when there is none
+- [ ] **S1.7** `401` without a JWT, `404` for an unknown id, and `401` — not `404` — when
+      unauthenticated, so the endpoint never leaks whether the request exists
+- [ ] A portal session token on this endpoint returns `401` (S2.7)
+- [ ] **S10.3** Timestamps are UTC ISO-8601 with a `Z`; `dueDate` is `yyyy-MM-dd`
+- [ ] Reading a request writes **no** audit event — a read is not a state change, and the contract
+      lists no action for it
 
 ## Follow the pattern in
 

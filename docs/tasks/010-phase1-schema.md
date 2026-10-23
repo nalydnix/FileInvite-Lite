@@ -20,6 +20,10 @@ and the tests that prove the shape is right.
 **May touch**
 - `api/src/FileInviteLite.Api/Domain/MagicLink.cs`, `UploadedFile.cs`
 - `api/src/FileInviteLite.Api/Domain/AuditEvent.cs` — new `AuditAction` constants only
+- `api/src/FileInviteLite.Api/Domain/DocumentRequest.cs`, `ChecklistItem.cs` — **the one new
+  navigation property each**, per the Navigation decision below, and nothing else. In particular
+  `RollUpStatus` and the overdue expressions are not yours to change. (Added after the fact: the
+  Navigation decision mandated these two edits while this list forbade them — see `docs/ai-log.md`)
 - `api/src/FileInviteLite.Api/Data/AppDbContext.cs` — the two new `DbSet` lines only
 - `api/src/FileInviteLite.Api/Data/Configurations/` — one configuration per new entity
 - `api/src/FileInviteLite.Api/Data/Migrations/` — **one** new migration
