@@ -199,12 +199,26 @@ public sealed class GetRequestAuditTrailTests(PortalFactory factory) : IClassFix
     }
 
     [Fact]
-    public async Task Trail_PageSizeAboveMaximumIsClamped()
+    // ListRequests answers an out-of-range pageSize with a 400 rather than clamping it, and the API
+    // should not have two conventions for the same mistake. The task file asked for clamping on the
+    // mistaken basis that ListRequests clamped; it does not.
+    public async Task Trail_PageSizeAboveMaximum_Returns400NamingPageSize()
     {
         var request = await factory.SeedAsync();
         var client = await StaffAsync();
 
         var response = await client.GetAsync(Url(request.RequestId, "?pageSize=100000"));
+
+        await AssertValidationProblemAsync(response, "pageSize");
+    }
+
+    [Fact]
+    public async Task Trail_PageSizeAtTheMaximum_IsAccepted()
+    {
+        var request = await factory.SeedAsync();
+        var client = await StaffAsync();
+
+        var response = await client.GetAsync(Url(request.RequestId, "?pageSize=200"));
 
         var body = await ReadAsync(response);
         Assert.Equal(200, body.GetProperty("pageSize").GetInt32());

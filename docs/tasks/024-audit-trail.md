@@ -34,7 +34,7 @@ spans `api/` and `web/`, which is why its web scope is narrow and disjoint from 
 ## Decisions (already made — implement, do not revisit)
 
 - **Route and shape are exactly `docs/api-contract.md` §Audit.** `page` default 1, `pageSize`
-  default 50 max 200, clamped the way `ListRequests` already clamps — reuse that behaviour's
+  default 50 max 200, validated the way `ListRequests` already validates — out of range is a 400, not a clamp. Reuse that behaviour’s
   shape, do not invent a second convention. `.RequireAuthorization(AuthPolicies.Staff)`.
 - **Scoped by request.** The endpoint takes a request id in the route — it is a staff endpoint, so
   that is allowed — but it must `404` for an unknown request id before it reads any audit row
@@ -67,8 +67,8 @@ spans `api/` and `web/`, which is why its web scope is narrow and disjoint from 
 - [ ] Events for the request's items and files appear in the trail; events belonging to another
       request do not — assert both directions
 - [ ] Paging is stable across pages when two events share an `OccurredAt`
-- [ ] `pageSize` above the maximum is clamped, not rejected with a `500`; a non-numeric `page`
-      returns `400` in the shared problem shape
+- [ ] `pageSize` above the maximum returns `400` naming the field, matching `ListRequests` rather
+      than clamping; a non-numeric or out-of-range `page` returns `400` in the shared problem shape
 - [ ] **S6.6** A test drives a full happy path — create, send, exchange, upload, approve — and
       asserts that no returned metadata contains a token, a password, a storage key or file content
 - [ ] **S6.3** A test asserts no application code path updates or deletes an audit event: grep the
@@ -82,7 +82,7 @@ spans `api/` and `web/`, which is why its web scope is narrow and disjoint from 
 
 ## Follow the pattern in
 
-`Features/Requests/ListRequests.cs` (paging, clamping, query shape),
+`Features/Requests/ListRequests.cs` (paging, validation, query shape),
 `web/src/features/requests/RequestListPage.tsx`, `web/src/app/useApi.ts`,
 `web/tests/RequestListPage.test.tsx`.
 
@@ -101,12 +101,29 @@ spans `api/` and `web/`, which is why its web scope is narrow and disjoint from 
   request id plus correlated subqueries over its items, files (via items), review decisions,
   magic links, reminders and webhook deliveries; count and page are two statements over that one
   filter. Order `OccurredAt desc, Id desc`. Metadata parsed to a JSON node; null/unparseable -> null.
-- Paging: `page` 1..int.MaxValue/200 else 400; `pageSize` >= 1 else 400, above 200 clamped to 200.
-  NOTE: `ListRequests` does not clamp — it returns 400 above its max of 100. The task's "clamped"
-  criterion was followed for pageSize; invalid values still 400 in the shared shape.
+- Paging: `page` 1..int.MaxValue/200 else 400; `pageSize` 1..200 else 400, in the shared shape.
+  The implementing agent originally clamped above 200, because this task file told it to "clamp the
+  way `ListRequests` already clamps" — and then correctly flagged that `ListRequests` does not
+  clamp: it returns 400 above its max of 100. The task file was wrong, not the code. Resolved by
+  the orchestrator in favour of one convention: out of range is a 400 on both endpoints. The
+  criterion above and the Decisions section are corrected, and the test that asserted clamping now
+  asserts the 400, with a second test pinning that exactly 200 is still accepted.
 - Web: `features/audit/AuditTrailPage.tsx` + `routes.tsx`; `app/routes.tsx` gained one import and
   one spread. Route `/requests/:id/audit`.
 - **Follow-up for task 022 (owner of `RequestDetailPage.tsx`): add a link to `/requests/:id/audit`.**
 - Not done: "send" and "approve" endpoints do not exist yet (021/022), so the S6.6 happy-path test
   covers create, exchange (magic link seeded directly), upload. Extend it once they merge.
 - Implementation was written before the tests (order deviation), so red-first was not observed.
+
+### Orchestrator verification, 2026-10-23
+
+The implementing agent disclosed that it wrote the endpoint before the tests, so it never saw them
+fail and never checked they would catch a regression. Since the two-direction scoping test is the
+whole point of this task, the orchestrator mutation-tested it instead of taking it on trust:
+commenting out the six child subqueries in the filter (leaving only `EntityId == requestId`) fails
+`Trail_IncludesItemAndFileEventsAndExcludesOtherRequests`, `Trail_ShowsARealUploadOnlyInItsOwnRequest`
+and three others. The tests are not vacuous. Mutation reverted.
+
+The frontend suite was run three times to rule out flakiness: 53 passed each time.
+
+Final state: 306 backend tests, 53 frontend, `dotnet format` clean, typecheck and lint clean.

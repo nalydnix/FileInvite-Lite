@@ -34,8 +34,9 @@ public sealed class GetRequestAuditTrail : IEndpoint
     {
         public int PageNumber => ParseInt(Page) ?? 1;
 
-        // Above the maximum is clamped rather than rejected (task 024).
-        public int PageSizeValue => Math.Min(ParseInt(PageSize) ?? DefaultPageSize, MaxPageSize);
+        // Rejected above the maximum, not clamped: ListRequests already answers an out-of-range
+        // pageSize with a 400, and the API should not have two conventions for the same mistake.
+        public int PageSizeValue => ParseInt(PageSize) ?? DefaultPageSize;
 
         internal static int? ParseInt(string? value) =>
             int.TryParse(value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var n)
@@ -66,9 +67,9 @@ public sealed class GetRequestAuditTrail : IEndpoint
                 .WithMessage($"Page must be a whole number from 1 to {MaxPage}.");
 
             RuleFor(q => q.PageSize)
-                .Must(p => Query.ParseInt(p) is >= 1)
+                .Must(p => Query.ParseInt(p) is >= 1 and <= MaxPageSize)
                 .When(q => q.PageSize is not null)
-                .WithMessage("PageSize must be a whole number of at least 1.");
+                .WithMessage($"PageSize must be a whole number from 1 to {MaxPageSize}.");
         }
     }
 
