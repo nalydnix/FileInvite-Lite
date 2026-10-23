@@ -29,11 +29,20 @@ public interface IFileStorage
     Task<string> SaveAsync(Stream content, CancellationToken ct);  // returns a storage key
     Task<Stream> OpenReadAsync(string key, CancellationToken ct);
     Task<bool> ExistsAsync(string key, CancellationToken ct);
+    Task DiscardAsync(string key, CancellationToken ct);           // rollback only
 }
 ```
 
 `LocalDiskFileStorage` writes under `Storage:RootPath` — a gitignored folder locally, `/home/files`
 in production.
+
+**`DiscardAsync` is rollback-only.** A DOCX or XLSX cannot be content-sniffed until the whole ZIP
+is on disk, so `SaveAsync` has already written the blob by the time a bad upload is refused.
+`DiscardAsync` removes a blob that `SaveAsync` wrote but that no committed row refers to: an
+upload that failed validation, or whose transaction did not commit. It is never a way to delete a
+file that belongs to a committed upload. Nothing in the MVP deletes a domain row, so nothing
+deletes a blob; erasure pseudonymises instead (ADR 0006). Download code (`OpenReadAsync`) must
+not call it.
 
 ### Rules
 
@@ -53,9 +62,11 @@ in production.
 6. **Hash on write.** SHA-256 is computed while streaming and stored, giving integrity checking
    and duplicate detection for free.
 7. **Nothing is deleted.** A re-upload after rejection supersedes the previous file; the previous
-   row and blob stay. Deletion exists only in the GDPR erasure path (ADR 0006).
+   row and blob stay. Deletion exists only in the GDPR erasure path (ADR 0006). The one blob
+   removal that exists, `DiscardAsync`, applies only to blobs no committed row refers to.
 8. **Partial writes are cleaned up.** A failed or aborted upload removes its temporary file and
-   commits no database row.
+   commits no database row. A blob already written for an upload that is then refused, or whose
+   commit fails, is removed with `DiscardAsync`.
 
 ## Consequences
 

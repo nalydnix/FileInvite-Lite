@@ -17,6 +17,9 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
     public DbSet<MagicLink> MagicLinks => Set<MagicLink>();
     public DbSet<UploadedFile> UploadedFiles => Set<UploadedFile>();
+    public DbSet<ReviewDecision> ReviewDecisions => Set<ReviewDecision>();
+    public DbSet<Reminder> Reminders => Set<Reminder>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

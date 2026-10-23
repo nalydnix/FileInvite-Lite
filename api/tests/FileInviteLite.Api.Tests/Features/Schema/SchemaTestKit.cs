@@ -87,4 +87,28 @@ public abstract class SchemaTestBase : IAsyncLifetime
             StorageKey = storageKey ?? $"2026/10/{Guid.NewGuid():N}",
             UploadedAt = DateTime.UtcNow,
         };
+
+    protected static ReviewDecision NewDecision(
+        Guid itemId, ReviewOutcome outcome = ReviewOutcome.Approve, string? comment = null, DateTime? reviewedAt = null) =>
+        new()
+        {
+            ChecklistItemId = itemId,
+            Decision = outcome,
+            Comment = comment,
+            ReviewedBy = Guid.NewGuid(),
+            ReviewedAt = reviewedAt ?? DateTime.UtcNow,
+        };
+
+    protected static Reminder NewReminder(Guid requestId, DateTime? sentAt = null, string reason = "Overdue") =>
+        new() { RequestId = requestId, SentAt = sentAt ?? DateTime.UtcNow, Reason = reason };
+
+    protected static WebhookDelivery NewDelivery(
+        Guid requestId, string? payloadHash = null, DateTime? deliveredAt = null) =>
+        new()
+        {
+            RequestId = requestId,
+            Url = "https://hooks.example.com/complete",
+            PayloadHash = payloadHash ?? new string('e', 64),
+            DeliveredAt = deliveredAt,
+        };
 }

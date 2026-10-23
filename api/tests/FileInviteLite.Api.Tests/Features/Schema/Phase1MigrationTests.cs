@@ -43,9 +43,10 @@ public sealed class Phase1MigrationTests : IDisposable
 
         await using (var db = NewContext())
         {
+            // Later phases add their own migrations after this one; they are pending here too.
             Assert.Equal(
-                ["AddMagicLinksAndUploadedFiles"],
-                (await db.Database.GetPendingMigrationsAsync()).Select(m => m[(m.IndexOf('_') + 1)..]));
+                "AddMagicLinksAndUploadedFiles",
+                (await db.Database.GetPendingMigrationsAsync()).Select(m => m[(m.IndexOf('_') + 1)..]).First());
 
             await db.Database.MigrateAsync();
 
@@ -92,7 +93,7 @@ public sealed class Phase1MigrationTests : IDisposable
                 PreviousMigration,
                 names[2], // the Phase 1 migration, asserted by name just below
             ],
-            names);
+            names.Take(3)); // later phases append their own migrations; Phase2MigrationTests pins those
         Assert.EndsWith("_AddMagicLinksAndUploadedFiles", names[2]);
 
         var migration = assembly.CreateMigration(assembly.Migrations[names[2]], db.Database.ProviderName!);

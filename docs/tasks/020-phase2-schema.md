@@ -25,6 +25,8 @@ This task adds no endpoint, no service, no job and no page.
 - `api/src/FileInviteLite.Api/Data/Configurations/` — one configuration per new entity
 - `api/src/FileInviteLite.Api/Data/Migrations/` — **one** new migration
 - `api/tests/FileInviteLite.Api.Tests/Features/Schema/`
+- `docs/adr/0005-file-storage.md` — document `IFileStorage.DiscardAsync` as rollback-only (added by
+  the project owner; task 012 put the method on the interface but the ADR omitted it)
 
 **Must not touch**
 Everything else. No endpoint, no service, no job, no frontend file, no project file, no document
@@ -89,3 +91,22 @@ the PR, security-reviewer run and findings resolved.
 ## Progress notes
 
 (append here as you go)
+
+### 2026-10-23 — implemented
+
+- Tests first (`Phase2SchemaTests`, `Phase2MigrationTests`, kit helpers): red because the three
+  entity types did not exist (CS0246/CS0103), then green after the entities, configurations,
+  navigations, `AuditAction` constants and `DbSet` lines.
+- One migration, `AddReviewRemindersAndWebhooks`: three CreateTable + four CreateIndex, nothing
+  else. Indexes: `Reminders(RequestId, SentAt)`, `ReviewDecisions(ChecklistItemId)`,
+  `WebhookDeliveries(DeliveredAt)`, `WebhookDeliveries(RequestId)`. `PayloadHash` has no index.
+  Existing three migrations untouched; only the model snapshot changed.
+- `Decision` is stored as text, max 16. `Attempts` has a database default of 0.
+- `Phase1MigrationTests` asserted that Phase 1's migration was the *last* one (exact pending list
+  and exact migration name list). A new migration necessarily changes that, so I loosened those two
+  assertions to "first pending is Phase 1's" and "first three names are the known ones". Phase 1's
+  additive-only and keeps-rows checks are unchanged; `Phase2MigrationTests` now pins the new
+  migration. Flagged for review as a touch to an existing test.
+- Also amended ADR 0005 for `IFileStorage.DiscardAsync` (rollback-only), per the owner.
+- Verified: `dotnet build` 0 warnings/errors; `dotnet test` 277 passed; `dotnet format
+  --verify-no-changes` clean. Frontend untouched, not re-run.
