@@ -91,8 +91,20 @@ internal static class ReviewDecisionWriter
                       nameof(DocumentRequest), request.Id, new { decisionId = decision.Id });
 
             // A prototype with no webhook configured must still be able to complete a request.
-            var url = configuration["Webhook:Url"];
-            if (!string.IsNullOrWhiteSpace(url))
+            //
+            // The URL must be an absolute HTTPS URI (S7.7, PLAN.md §4). A configured value that is
+            // not is treated as "not configured": no row, no WebhookQueued, and completion still
+            // succeeds. Without this, http://, file:/// or junk would be persisted here and later
+            // posted to, carrying the client's name and email in cleartext. The URL is never
+            // logged, because the warning would put it in a log that S6.6 keeps clean of
+            // configuration detail — the misconfiguration shows up as a request that completes
+            // with no delivery queued.
+            //
+            // Startup validation in Services/Webhooks/WebhookOptions.cs is the real gate and
+            // fails the host outright; this check is the defence in depth that does not depend on
+            // the delivery job being registered.
+            var url = DeliverableUrlOrNull(configuration["Webhook:Url"]);
+            if (url is not null)
             {
                 var delivery = new WebhookDelivery
                 {
@@ -111,6 +123,21 @@ internal static class ReviewDecisionWriter
         await db.SaveChangesAsync(ct);
 
         return Results.Ok(new Outcome(item.Id, item.Status.ToString(), request.Status.ToString()));
+    }
+
+    /// <summary>
+    /// The configured webhook URL if it may be stored and later posted to — an absolute HTTPS URI
+    /// and nothing else (S7.7) — otherwise null. `http://`, `file:///`, a relative value and
+    /// anything unparseable are all refused. Returns the trimmed form, so a padded setting cannot
+    /// be stored with its whitespace and then fail at the point of delivery instead of here.
+    /// </summary>
+    private static string? DeliverableUrlOrNull(string? url)
+    {
+        var trimmed = url?.Trim();
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+               && uri.Scheme == Uri.UriSchemeHttps
+            ? trimmed
+            : null;
     }
 }
 

@@ -329,6 +329,48 @@ public sealed class ReviewDecisionTests
 
     // ---- webhook ----------------------------------------------------------------------------
 
+    // S7.7 requires the webhook URL to be HTTPS. A security review found that only emptiness was
+    // checked here, so http://, file:/// or junk would be persisted and later posted to, carrying
+    // the client's name and email in cleartext. A value that is not an absolute HTTPS URI is now
+    // treated as "not configured": completion still succeeds, but nothing is queued.
+    [Theory]
+    [InlineData("http://hooks.example.test/fileinvite")]
+    [InlineData("http://localhost:9000/hook")]
+    [InlineData("file:///etc/passwd")]
+    [InlineData("ftp://hooks.example.test/x")]
+    [InlineData("hooks.example.test/fileinvite")]
+    [InlineData("/relative/hook")]
+    [InlineData("not a url at all")]
+    public async Task Completion_WithANonHttpsWebhookUrl_QueuesNothingAndStillCompletes_S7_7(string url)
+    {
+        using var factory = new ReviewFactory(url);
+        var seeded = await factory.SeedReviewAsync([RequiredUploaded, OptionalUploaded]);
+        var client = await factory.StaffClientAsync();
+
+        (await client.ApproveAsync(seeded.Items[0].Id, new { comment = "ok" })).EnsureSuccessStatusCode();
+
+        var request = await factory.WithDbAsync(db => db.DocumentRequests.SingleAsync());
+        Assert.Equal(RequestStatus.Complete, request.Status);
+        Assert.Empty(await factory.WithDbAsync(db => db.WebhookDeliveries.ToListAsync()));
+
+        var actions = await factory.WithDbAsync(db => db.AuditEvents.Select(e => e.Action).ToListAsync());
+        Assert.Contains(AuditAction.RequestCompleted, actions);
+        Assert.DoesNotContain(AuditAction.WebhookQueued, actions);
+    }
+
+    [Fact]
+    public async Task Completion_WithAPaddedHttpsUrl_StoresItTrimmed_S7_7()
+    {
+        using var factory = new ReviewFactory($"  {ReviewFactory.ConfiguredWebhookUrl}  ");
+        var seeded = await factory.SeedReviewAsync([RequiredUploaded, OptionalUploaded]);
+        var client = await factory.StaffClientAsync();
+
+        (await client.ApproveAsync(seeded.Items[0].Id, new { comment = "ok" })).EnsureSuccessStatusCode();
+
+        var delivery = await factory.WithDbAsync(db => db.WebhookDeliveries.SingleAsync());
+        Assert.Equal(ReviewFactory.ConfiguredWebhookUrl, delivery.Url);
+    }
+
     [Fact]
     public async Task Completion_WithAWebhookConfigured_QueuesADeliveryInTheSameTransaction_S7_1()
     {
