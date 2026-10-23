@@ -82,3 +82,42 @@ the PR, security-reviewer run and findings resolved.
 ## Progress notes
 
 (append here as you go)
+
+- **Tests first.** `Features/Schema/` (`SchemaTests`, `Phase1MigrationTests`, shared `SchemaTestBase`)
+  was written and committed before any entity existed. Red state was a compile failure — `MagicLink`
+  and `UploadedFile` did not exist — which is the honest reason for those tests to fail.
+- **Implemented:** `MagicLink`, `UploadedFile`, one configuration each, two `DbSet` lines, five
+  `AuditAction` constants, and one migration, `AddMagicLinksAndUploadedFiles` (two `CreateTable`,
+  five `CreateIndex`, nothing else). The two earlier migrations are untouched.
+- **Scope note — a file outside the "May touch" list.** The decisions section requires
+  `DocumentRequest.MagicLinks` and `ChecklistItem.Files`, but `Domain/DocumentRequest.cs` and
+  `Domain/ChecklistItem.cs` are not in the list. I added exactly those two one-line `List<T>`
+  properties and nothing else, because the task's own decisions demand them and the relationships
+  are configured through them. The scope list looks like an omission; flagging it for review.
+  The relationships are configured in the two *new* configuration files, so the existing
+  `DocumentRequestConfiguration` / `ChecklistItemConfiguration` are unchanged.
+- **Assumption:** `UploadedFile.Sha256` and `MagicLink.TokenHash` are both hex SHA-256, so both are
+  `maxLength 64`. `SizeBytes` is `long` (INTEGER) so a 20 MB limit can be raised later without a
+  migration. `ExpiresAt`/`RevokedAt`/`UploadedAt` use the same `SpecifyKind(Utc)` read conversion
+  as `DocumentRequest.CreatedAt`, so they serialise with a trailing `Z`.
+- **Verification (after the last code commit):** `npm run check` from the repo root green — build,
+  153 backend tests (138 existing + 15 new), web typecheck, lint, 23 web tests.
+  `dotnet format api/FileInviteLite.sln --verify-no-changes` clean. The upgrade test
+  (`Phase1MigrationTests`) applies the migration on top of a populated database and passes.
+- **Security review** (general-purpose agent following `.claude/agents/security-reviewer.md`,
+  read-only, did not run code): no Critical, no High; verdict safe to open a PR. Carried forward:
+  - *M1* — the schema cannot stop a raw token being written to `TokenHash` (a 43-char base64url
+    token fits in 64). Not changed here: a CHECK constraint would be a schema change the task did not
+    ask for. Task 011 should route every write through one hashing helper and assert the stored value
+    is `SHA256(token)` hex and differs from the token.
+  - *M2* — UTC is not enforced on write. Later tasks take timestamps from `TimeProvider`, never
+    `DateTime.Now`.
+  - *N1* — ADR 0006 erasure clears `OriginalName`/`ContentType`/`Sha256`/`StorageKey`, but those are
+    `NOT NULL` and `StorageKey` is unique; a future erasure task needs a migration or unique tombstones.
+  - *N3/N4* — never serialise entities or `Include` `MagicLinks`/`Files` into a response;
+    `UploadedFile` has no `RequestId`, so every portal file query must join through the item filtered
+    by `CurrentPortal.RequestId` (add a cross-request scoping test in 013).
+  - *N2* — `FileDownloaded` and approve/reject audit actions are not in this task's five; later
+    tasks will need them.
+  - Suggested fix when merging: add `DocumentRequest.cs` and `ChecklistItem.cs` to this task's
+    "May touch" list so 011–013 do not copy the omission.

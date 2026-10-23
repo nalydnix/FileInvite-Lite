@@ -15,6 +15,8 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<DocumentRequest> DocumentRequests => Set<DocumentRequest>();
     public DbSet<ChecklistItem> ChecklistItems => Set<ChecklistItem>();
+    public DbSet<MagicLink> MagicLinks => Set<MagicLink>();
+    public DbSet<UploadedFile> UploadedFiles => Set<UploadedFile>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder) =>
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

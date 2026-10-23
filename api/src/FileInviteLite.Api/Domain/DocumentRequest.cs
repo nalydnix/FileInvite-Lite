@@ -30,6 +30,7 @@ public sealed class DocumentRequest
     public required DateTime CreatedAt { get; init; }
 
     public List<ChecklistItem> Items { get; init; } = [];
+    public List<MagicLink> MagicLinks { get; init; } = [];
 
     /// <summary>
     /// The status rule from docs/spec.md, over <see cref="Items"/> (which must be loaded). The
