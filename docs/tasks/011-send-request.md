@@ -106,3 +106,82 @@ orchestrator after 010 merged, not by an agent widening its own scope.
 ## Progress notes
 
 (append here as you go)
+
+### Task 011 — implementation notes
+
+Done: `SendRequest.cs`, `GetRequest.cs`, `IMagicLinkTokens`/`MagicLinkTokens`, `IEmailSender` +
+`DevSinkEmailSender` (Development only) + `NoOpEmailSender` (everywhere else), `PortalOptions`
+(validated at startup), `RequestDetailPage.tsx` and its route. 40 new backend tests, 6 new frontend
+tests.
+
+Decisions and things the next person needs:
+
+- **Token hash is lowercase hex**, decided in `MagicLinkTokens.Hash` (ADR 0004 only says "hex").
+  **Follow-up for task 012's owner:** the dual-case match and the `TODO(011)` in
+  `Features/Portal/ExchangeToken.cs` are now redundant. Replace the inline SHA-256 with
+  `IMagicLinkTokens.Hash` and match on one value. Not edited here: outside this task's scope.
+  (`PortalTestKit.HashToken` already uses lowercase.)
+- **`issuedAt` is derived**: `ExpiresAt` minus `Portal:MagicLinkLifetimeDays`. If the lifetime
+  setting is changed, links issued before the change report a shifted `issuedAt`; `expiresAt` is
+  always exact. No column was added (the schema is closed).
+- **"Newest link"**: live (unrevoked) first, then latest `ExpiresAt`. Re-sending revokes every
+  earlier link, so there is at most one live link and it is the newest, even if the lifetime was
+  shortened between sends.
+- **Order of `items`** in `GetRequest` is unspecified in the contract and `ChecklistItem` has no
+  position column; it matches `GetPortalRequest` (no explicit `OrderBy`, so storage order).
+- **Ids are bound as `string`** on both endpoints and parsed in the handler, so a non-GUID id is a
+  404 after authorisation, not a routing 404 that would make an unauthenticated caller see 404
+  instead of 401 (S1.7).
+- **Email failure after commit** is caught and logged by exception type only; the link is already
+  issued and is returned to the caller, so a broken sink does not become a 500.
+- `MagicLinkEmail` and `IssuedToken` override `ToString` so the credential cannot be printed by
+  accident.
+- `Program.cs`: one registration block (options, tokens, email by environment) and the stale
+  "arrives with the Phase 1 portal task" comment corrected.
+- Existing test touched: `web/tests/CreateRequestPage.test.tsx` asserted the exact list of request
+  routes; the expectation gained `'/requests/:id'` (required by wiring the detail page). Nothing
+  was weakened.
+- Not done (out of scope): `RequestListPage` rows do not link to the new detail page
+  (`RequestListPage.tsx` is not in this task's file list). The detail page is reachable at
+  `/requests/{id}`. A follow-up should add the link.
+- Not verified in a real browser: the page is covered by Vitest only.
+
+### Security review findings, resolved by the orchestrator
+
+An opus security review of this branch found no Critical or High issues. It confirmed, by reading:
+32 bytes from `RandomNumberGenerator`; only the lowercase SHA-256 hex persisted; `IMagicLinkTokens`
+the single hash site in product code; one `SaveChangesAsync` for the revocations, the new link, the
+status change and all three audit events; the dev sink chosen by registration and writing nothing
+in Production; `GetRequest` matching the contract field for field with no token, URL, storage key
+or file content; and a portal session token answered `401` on both endpoints.
+
+Two Medium findings, both fixed here rather than recorded and deferred:
+
+1. **Concurrent sends could leave two live magic links.** `SendRequest` read the live links,
+   mutated them and committed with no concurrency control, so two overlapping sends each revoked
+   only what they saw and both inserted a live link — leaving a link staff believe is revoked still
+   granting access, against S1.14. The read-modify-write is now inside an explicit transaction, as
+   `api/CLAUDE.md` asks of a multi-write handler; SQLite refuses the second writer rather than
+   interleaving, so one send succeeds and the other fails loudly. Still only one
+   `SaveChangesAsync`. **Not reproduced by a test** — a deterministic test for this race needs two
+   concurrent requests against one SQLite file, which is flaky; the fix is reasoned, not pinned.
+2. **The one-shot link sat in a form control with no autofill suppression.** The URL was correctly
+   in component state only, but an `<input readOnly>` is a value browsers may cache and restore
+   across a reload and that extensions and password managers read. The input now sets
+   `autoComplete="off"` and `spellCheck={false}` and carries no `name`, pinned by a new test so it
+   cannot regress. The warning text also now says the link grants upload access and that copying
+   leaves it on the clipboard.
+
+Notes the review raised that need no change here:
+
+- **012's dual-case hash match is redundant, not a weakness.** `hash` is a deterministic SHA-256 of
+  the caller's input and `TokenHash` now has one writer, so the `|| upperHash` branch gives an
+  attacker no extra preimages. The only residual is theoretical: if both cases of one hash were
+  ever stored, `SingleOrDefaultAsync` would throw and produce a 500 distinguishable from S2.6's
+  uniform 401. Unreachable today. The cleanup — use `IMagicLinkTokens.Hash` and a single equality,
+  drop the `TODO(011)` — belongs in a sequential pass over `Features/Portal/`.
+- **`issuedAt` derivation leaks nothing**, because `ExpiresAt` is in the same response and the
+  lifetime is fixed. It can only mislead if the configured lifetime changes, which is documented;
+  the authoritative record is the `MagicLinkIssued` audit event's real `OccurredAt`.
+- **The dev sink keeps live links on disk until they expire**, with no cleanup. Intended by S1.15,
+  path gitignored, Development only.
