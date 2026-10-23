@@ -134,7 +134,12 @@ export function CreateRequestPage() {
           {fieldError('items', 'items-error')}
 
           {items.map((item, index) => (
-            <div key={item.key} role="group" aria-label={`Document ${index + 1}`}>
+            <div
+              key={item.key}
+              role="group"
+              aria-label={`Document ${index + 1}`}
+              style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '1rem' }}
+            >
               <label htmlFor={`item-${item.key}-title`}>Document {index + 1} title</label>
               <input
                 id={`item-${item.key}-title`}

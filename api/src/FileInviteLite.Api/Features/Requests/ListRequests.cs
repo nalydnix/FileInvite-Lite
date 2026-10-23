@@ -14,6 +14,9 @@ public sealed class ListRequests : IEndpoint
     private const int DefaultPageSize = 20;
     private const int MaxPageSize = 100;
 
+    // Keeps (page - 1) * pageSize inside int, so the offset can never wrap to a negative.
+    private const int MaxPage = int.MaxValue / MaxPageSize;
+
     public void Map(IEndpointRouteBuilder app) =>
         app.MapGet("/api/requests", Handle)
            .RequireAuthorization(AuthPolicies.Staff)
@@ -74,9 +77,9 @@ public sealed class ListRequests : IEndpoint
                 .WithMessage("Overdue must be true or false.");
 
             RuleFor(q => q.Page)
-                .Must(p => Query.ParseInt(p) is >= 1)
+                .Must(p => Query.ParseInt(p) is >= 1 and <= MaxPage)
                 .When(q => q.Page is not null)
-                .WithMessage("Page must be a whole number of 1 or more.");
+                .WithMessage($"Page must be a whole number from 1 to {MaxPage}.");
 
             RuleFor(q => q.PageSize)
                 .Must(p => Query.ParseInt(p) is >= 1 and <= MaxPageSize)

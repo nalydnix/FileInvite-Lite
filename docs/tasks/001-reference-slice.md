@@ -127,3 +127,36 @@ Cross-cutting:
 - **Decision — overdue rule**: `DocumentRequest.IsOverdue(DateOnly today)` returns an
   `Expression<Func<DocumentRequest,bool>>`; the list handler uses it for the SQL filter and compiles
   the same expression once per request to compute `isOverdue` on returned rows.
+
+### Session 1 (continued) — state at hand-off
+
+- Red tests written by the `test-writer` agent (84 fail on the unmapped route, 24 pass against the
+  existing domain), then endpoints implemented. `dotnet test`: 122 pass, **2 fail** (below).
+  `dotnet format --verify-no-changes` clean; no pending model changes; frontend 23 tests, typecheck
+  and lint green.
+- Migration upgrade proven by `MigrationUpgradeTests` (applies on top of `InitialStaffAndAudit` with
+  rows present).
+- Ran the real app (`npm run dev`), signed in, empty state renders. Submitting the create form with
+  no date returned **500** — found by hand, not by the criteria.
+- security-reviewer: no Critical/High. One Medium (page offset overflow) — fixed: `page` capped at
+  `int.MaxValue / 100`, test added.
+
+**BLOCKED — scope question for the owner.** Framework body-binding errors (malformed JSON, an empty
+or unparseable `dueDate`) never reach `ValidationFilter`. In Development ASP.NET *throws*
+`BadHttpRequestException`, so `UseExceptionHandler` turns it into a **500**; outside Development it
+is a 400 in the framework's own shape (wrong `type`, no `errors`). Either way it violates the
+cross-cutting criterion "every error body matches the contract", and a user clearing the date field
+hits it. The fix is an `IExceptionHandler` (in `Common/`) mapping `BadHttpRequestException` to
+`ProblemResults.Validation(...)`, **registered with one line in `Program.cs`** — which the task's
+scope limits to FluentValidation registration. Two tests pin this:
+`Create_UnparseableDueDate_…_S10_1` and `Create_MalformedJson_…_S10_1`. Not skipped or weakened.
+
+### Open decisions / assumptions (flag in PR)
+- `sort=createdAt` is ascending (contract gives no direction).
+- `overdue=false` returns only non-overdue requests.
+- Nested validation keys are `items[0].title`; bad query values are keyed by parameter name.
+- `detail` is absent on validation errors: `ProblemResults.Validation(errors)` does not set it and
+  `Common/Results` is outside this task's scope. The contract example shows `detail`.
+- Email check is stricter than FluentValidation's `EmailAddress()` (which accepts spaces).
+- All-optional-items request never becomes `Complete` (pinned by a test); owner to confirm.
+- Styling is inline/minimal because `web/src/index.css` is outside scope.
