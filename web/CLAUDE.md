@@ -37,8 +37,12 @@ src/
 
 ### Network
 
-- **All calls go through `app/apiClient.ts`.** No component calls `fetch` directly — the bearer
-  header, the base URL and the problem-details parsing live in exactly one place.
+- **All calls go through `app/apiClient.ts`.** No component calls `fetch` directly — the
+  `Authorization` header, the base URL and the problem-details parsing live in exactly one place.
+- `apiRequest` takes a `scheme` (`'Bearer'`, the default, or `'Portal'`) because the two
+  credentials are never interchangeable, and sends a `FormData` body as multipart without setting
+  `Content-Type`. A portal call or an upload therefore needs no second transport — if you find
+  yourself writing one, the missing option belongs in `apiClient`, added in a sequential task.
 - The API returns RFC 7807 problem details (`docs/api-contract.md`). `apiClient` turns them into a
   typed error; components show `detail`, never a raw status code (S9.8).
 - Never put a token, an email or any personal data in a URL, a query string or an analytics call.
