@@ -36,27 +36,44 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * The `Authorization` scheme word. Two credentials that are never interchangeable, so the caller
+ * states which one it holds rather than this file guessing (docs/api-contract.md §Authentication).
+ */
+export type AuthScheme = 'Bearer' | 'Portal'
+
 export interface RequestOptions {
   method?: 'GET' | 'POST'
+  /** JSON-encoded, unless it is `FormData`, which is sent as multipart. */
   body?: unknown
-  /** Bearer token, or the portal session token. Held in memory by the caller, never stored. */
+  /** Staff JWT, or the portal session token. Held in memory by the caller, never stored. */
   token?: string
+  /** Defaults to `Bearer`; portal endpoints take `Portal`. */
+  scheme?: AuthScheme
   signal?: AbortSignal
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const { method = 'GET', body, token, signal } = options
+  const { method = 'GET', body, token, scheme = 'Bearer', signal } = options
 
   const headers: Record<string, string> = {}
-  if (body !== undefined) headers['Content-Type'] = 'application/json'
-  if (token) headers.Authorization = `Bearer ${token}`
+  if (token) headers.Authorization = `${scheme} ${token}`
+
+  let payload: BodyInit | undefined
+  if (body instanceof FormData) {
+    // The browser writes the multipart boundary into Content-Type; setting it here breaks it.
+    payload = body
+  } else if (body !== undefined) {
+    headers['Content-Type'] = 'application/json'
+    payload = JSON.stringify(body)
+  }
 
   const response = await fetch(`${baseUrl}${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: payload,
     signal,
-    // No cookies cross origins: the token is a bearer header (ADR 0003).
+    // No cookies cross origins: the token is an Authorization header (ADR 0003).
     credentials: 'omit',
   })
 

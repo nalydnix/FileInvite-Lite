@@ -62,4 +62,34 @@ describe('apiClient', () => {
     expect((init?.headers as Record<string, string>).Authorization).toBe('Bearer the-token')
     expect(init?.credentials).toBe('omit')
   })
+
+  // The portal session token is a different credential with a different scheme word, and the two
+  // must never be interchangeable (docs/api-contract.md §Authentication, S2.7, S2.8).
+  it('authorises a portal call with the Portal scheme, never Bearer', async () => {
+    const fetchMock = mockFetch(new Response(JSON.stringify({ ok: true }), { status: 200 }))
+
+    await apiRequest('/api/portal/request', { token: 'session-token', scheme: 'Portal' })
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect((init?.headers as Record<string, string>).Authorization).toBe('Portal session-token')
+    expect(init?.credentials).toBe('omit')
+  })
+
+  it('sends FormData as multipart without forcing a content type', async () => {
+    const fetchMock = mockFetch(new Response(JSON.stringify({ id: 'x' }), { status: 201 }))
+    const form = new FormData()
+    form.append('file', new File(['x'], 'a.pdf'))
+
+    await apiRequest('/api/portal/items/i/files', {
+      method: 'POST',
+      body: form,
+      token: 't',
+      scheme: 'Portal',
+    })
+
+    const [, init] = fetchMock.mock.calls[0]
+    expect(init?.body).toBe(form)
+    // The browser writes the boundary into Content-Type; setting it here would break the upload.
+    expect(init?.headers as Record<string, string>).not.toHaveProperty('Content-Type')
+  })
 })
