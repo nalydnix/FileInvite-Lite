@@ -174,3 +174,18 @@ scope limits to FluentValidation registration. Two tests pin this:
   message (which can quote the payload) goes to the log only. `UnreadableBodyTests` runs three
   cases in both environments and asserts no parser internals or payload text in the body.
 - Status: 132 backend tests pass; `dotnet format` clean.
+
+### Session 1 (continued) — review fixes to `UnreadableBodyHandling.cs`
+
+- **Status is no longer flattened.** The handler maps on `BadHttpRequestException.StatusCode`: 400 →
+  `ProblemResults.Validation("body", …)`, 413 → `PayloadTooLarge`, 415 → `UnsupportedMediaType`
+  (defensive: a `text/plain` POST already returns a real 415 without reaching the handler), anything
+  else keeps its status with a generic problem and no `errors`.
+- **Logging no longer carries client input.** Warning logs exception type, method and path only; the
+  exception itself is logged at Debug.
+- **Coverage, stated plainly:** `UnreadableBodyHandlerTests` calls the handler directly for 400, 413,
+  415, 408 and a non-matching exception. 413 and 408 are **unit-covered only** — TestServer cannot
+  produce Kestrel's transport-level failures. An integration test pins `text/plain` → 415.
+- Verification: 138 backend tests pass (built with `--artifacts-path` because another session's
+  running instance of this branch locks `bin/`, so plain `npm run check:api` could not overwrite the
+  apphost); frontend 23 pass; `dotnet format` clean.

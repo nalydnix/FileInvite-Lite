@@ -47,4 +47,18 @@ public sealed class UnreadableBodyTests(ApiFactory factory) : IClassFixture<ApiF
             Assert.DoesNotContain(internals, raw, StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    [Fact]
+    public async Task Create_WithATextPlainBody_Returns415_NotAValidationError()
+    {
+        // Never reaches the exception handler today; pinned so that a change to how bad requests
+        // are reported cannot quietly turn an unsupported media type into a 400.
+        var client = factory.CreateClient();
+        await client.AuthenticateAsStaffAsync();
+
+        var response = await client.PostAsync(
+            "/api/requests", new StringContent("hello", Encoding.UTF8, "text/plain"));
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
 }

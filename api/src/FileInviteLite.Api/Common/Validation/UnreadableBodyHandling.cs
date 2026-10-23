@@ -30,19 +30,35 @@ public sealed class UnreadableBodyExceptionHandler(ILogger<UnreadableBodyExcepti
     public async ValueTask<bool> TryHandleAsync(
         HttpContext context, Exception exception, CancellationToken cancellationToken)
     {
-        if (exception is not BadHttpRequestException)
+        if (exception is not BadHttpRequestException bad)
         {
             return false;
         }
 
-        // The framework's message describes the parser's internals and can quote the payload, so
-        // it goes to the log and never into the body.
-        logger.LogWarning(exception, "A request body could not be read.");
+        // The framework's message can quote client input — a route or query binding failure
+        // includes the submitted value in full — so the default log carries only where it
+        // happened, and the exception itself is there for a developer who turns Debug on.
+        logger.LogWarning(
+            "A request could not be read: {ExceptionType} on {Method} {Path}.",
+            exception.GetType().Name, context.Request.Method, context.Request.Path);
+        logger.LogDebug(exception, "Details of the unreadable request.");
 
-        context.Response.StatusCode = StatusCodes.Status400BadRequest;
-        await ProblemResults
-            .Validation("body", "The request body could not be read.")
-            .ExecuteAsync(context);
+        // Keep the status the framework chose: only a plain 400 is a validation failure. A body
+        // over the size limit (413) or one that took too long (408) must not be flattened to it.
+        IResult problem = bad.StatusCode switch
+        {
+            StatusCodes.Status400BadRequest =>
+                ProblemResults.Validation("body", "The request body could not be read."),
+            StatusCodes.Status413PayloadTooLarge =>
+                ProblemResults.PayloadTooLarge("The request body is too large."),
+            StatusCodes.Status415UnsupportedMediaType =>
+                ProblemResults.UnsupportedMediaType("The request content type is not supported."),
+            _ => TypedResults.Problem(
+                detail: "The request could not be processed.", statusCode: bad.StatusCode),
+        };
+
+        context.Response.StatusCode = bad.StatusCode;
+        await problem.ExecuteAsync(context);
 
         return true;
     }
