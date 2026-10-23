@@ -82,3 +82,21 @@ the PR, security-reviewer run and findings resolved.
 ## Progress notes
 
 (append here as you go)
+
+- **Tests first.** `Features/Schema/` (`SchemaTests`, `Phase1MigrationTests`, shared `SchemaTestBase`)
+  was written and committed before any entity existed. Red state was a compile failure — `MagicLink`
+  and `UploadedFile` did not exist — which is the honest reason for those tests to fail.
+- **Implemented:** `MagicLink`, `UploadedFile`, one configuration each, two `DbSet` lines, five
+  `AuditAction` constants, and one migration, `AddMagicLinksAndUploadedFiles` (two `CreateTable`,
+  five `CreateIndex`, nothing else). The two earlier migrations are untouched.
+- **Scope note — a file outside the "May touch" list.** The decisions section requires
+  `DocumentRequest.MagicLinks` and `ChecklistItem.Files`, but `Domain/DocumentRequest.cs` and
+  `Domain/ChecklistItem.cs` are not in the list. I added exactly those two one-line `List<T>`
+  properties and nothing else, because the task's own decisions demand them and the relationships
+  are configured through them. The scope list looks like an omission; flagging it for review.
+  The relationships are configured in the two *new* configuration files, so the existing
+  `DocumentRequestConfiguration` / `ChecklistItemConfiguration` are unchanged.
+- **Assumption:** `UploadedFile.Sha256` and `MagicLink.TokenHash` are both hex SHA-256, so both are
+  `maxLength 64`. `SizeBytes` is `long` (INTEGER) so a 20 MB limit can be raised later without a
+  migration. `ExpiresAt`/`RevokedAt`/`UploadedAt` use the same `SpecifyKind(Utc)` read conversion
+  as `DocumentRequest.CreatedAt`, so they serialise with a trailing `Z`.

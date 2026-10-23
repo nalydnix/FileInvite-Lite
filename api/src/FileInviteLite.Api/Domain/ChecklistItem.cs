@@ -17,4 +17,5 @@ public sealed class ChecklistItem
     public string? Description { get; set; }
     public required bool Required { get; set; }
     public ItemStatus Status { get; set; } = ItemStatus.Outstanding;
+    public List<UploadedFile> Files { get; init; } = [];
 }

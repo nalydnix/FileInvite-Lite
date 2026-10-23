@@ -48,4 +48,9 @@ public static class AuditAction
     public const string StaffLoggedIn = nameof(StaffLoggedIn);
     public const string StaffLoginFailed = nameof(StaffLoginFailed);
     public const string RequestCreated = nameof(RequestCreated);
+    public const string RequestSent = nameof(RequestSent);
+    public const string MagicLinkIssued = nameof(MagicLinkIssued);
+    public const string MagicLinkRevoked = nameof(MagicLinkRevoked);
+    public const string PortalAccessed = nameof(PortalAccessed);
+    public const string ItemUploaded = nameof(ItemUploaded);
 }
