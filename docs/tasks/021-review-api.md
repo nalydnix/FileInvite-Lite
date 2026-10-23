@@ -98,3 +98,22 @@ resolved.
 ## Progress notes
 
 (append here as you go)
+
+### Task 021 — implemented
+- Added `Features/Review/{DownloadFile,ApproveItem,RejectItem}.cs` plus `ReviewDecisionWriter.cs`
+  (shared decision/roll-up/commit logic and the webhook payload hash, kept inside the feature
+  folder so approve and reject cannot drift). Tests in `Tests/Features/Review/`. No `Program.cs`,
+  `AppDbContext`, migration or other forbidden file touched; no registration needed.
+- `RollUpStatus` is called, never restated. `RequestCompleted` (and the webhook) fire only on the
+  transition into `Complete`, not when a later approval finds it already `Complete` (S4.12).
+- Download opens the blob first (missing blob => 404, no audit, key never logged), then commits
+  `FileDownloaded`, then streams. `DiscardAsync` is not used.
+- Decision calls: rejecting an `Approved` item returns 409 (not in the task file; chosen so a
+  rejection cannot silently un-complete a request whose webhook may have gone out). Needs owner
+  confirmation. Approve requires a JSON body (`{}`), because the shared `ValidationFilter` needs one.
+- **FLAG FOR TASK 025:** `PayloadHash` is SHA-256 of JSON this task serialises (`CompletionPayload`).
+  025 must produce byte-identical JSON or the hash is meaningless: `JsonSerializerDefaults.Web`
+  (camelCase), compact, UTF-8, properties in contract order (`event, requestId, clientName,
+  clientEmail, completedAt, items[id,title,required,outcome]`), items ordered by `id` ascending,
+  `outcome` = item status name, `completedAt` = the completing `ReviewDecision.ReviewedAt` truncated
+  to whole seconds (UTC). Items' state is as of completion; a later change would alter a recomputed hash.
