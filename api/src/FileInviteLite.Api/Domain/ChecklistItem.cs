@@ -18,4 +18,5 @@ public sealed class ChecklistItem
     public required bool Required { get; set; }
     public ItemStatus Status { get; set; } = ItemStatus.Outstanding;
     public List<UploadedFile> Files { get; init; } = [];
+    public List<ReviewDecision> Decisions { get; init; } = [];
 }

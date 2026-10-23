@@ -53,4 +53,12 @@ public static class AuditAction
     public const string MagicLinkRevoked = nameof(MagicLinkRevoked);
     public const string PortalAccessed = nameof(PortalAccessed);
     public const string ItemUploaded = nameof(ItemUploaded);
+    public const string FileDownloaded = nameof(FileDownloaded);
+    public const string ItemApproved = nameof(ItemApproved);
+    public const string ItemRejected = nameof(ItemRejected);
+    public const string RequestCompleted = nameof(RequestCompleted);
+    public const string ReminderSent = nameof(ReminderSent);
+    public const string WebhookQueued = nameof(WebhookQueued);
+    public const string WebhookDelivered = nameof(WebhookDelivered);
+    public const string WebhookFailed = nameof(WebhookFailed);
 }

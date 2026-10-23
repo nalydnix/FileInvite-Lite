@@ -163,6 +163,61 @@ namespace FileInviteLite.Api.Data.Migrations
                     b.ToTable("MagicLinks", (string)null);
                 });
 
+            modelBuilder.Entity("FileInviteLite.Api.Domain.Reminder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("SentAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RequestId", "SentAt");
+
+                    b.ToTable("Reminders", (string)null);
+                });
+
+            modelBuilder.Entity("FileInviteLite.Api.Domain.ReviewDecision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ChecklistItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Comment")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Decision")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("ReviewedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("ReviewedBy")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ChecklistItemId");
+
+                    b.ToTable("ReviewDecisions", (string)null);
+                });
+
             modelBuilder.Entity("FileInviteLite.Api.Domain.StaffUser", b =>
                 {
                     b.Property<Guid>("Id")
@@ -238,6 +293,45 @@ namespace FileInviteLite.Api.Data.Migrations
                     b.ToTable("UploadedFiles", (string)null);
                 });
 
+            modelBuilder.Entity("FileInviteLite.Api.Domain.WebhookDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Attempts")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(0);
+
+                    b.Property<DateTime?>("DeliveredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("LastStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PayloadHash")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("RequestId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DeliveredAt");
+
+                    b.HasIndex("RequestId");
+
+                    b.ToTable("WebhookDeliveries", (string)null);
+                });
+
             modelBuilder.Entity("FileInviteLite.Api.Domain.ChecklistItem", b =>
                 {
                     b.HasOne("FileInviteLite.Api.Domain.DocumentRequest", null)
@@ -265,6 +359,24 @@ namespace FileInviteLite.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FileInviteLite.Api.Domain.Reminder", b =>
+                {
+                    b.HasOne("FileInviteLite.Api.Domain.DocumentRequest", null)
+                        .WithMany("Reminders")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("FileInviteLite.Api.Domain.ReviewDecision", b =>
+                {
+                    b.HasOne("FileInviteLite.Api.Domain.ChecklistItem", null)
+                        .WithMany("Decisions")
+                        .HasForeignKey("ChecklistItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FileInviteLite.Api.Domain.UploadedFile", b =>
                 {
                     b.HasOne("FileInviteLite.Api.Domain.ChecklistItem", null)
@@ -274,8 +386,19 @@ namespace FileInviteLite.Api.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("FileInviteLite.Api.Domain.WebhookDelivery", b =>
+                {
+                    b.HasOne("FileInviteLite.Api.Domain.DocumentRequest", null)
+                        .WithMany("WebhookDeliveries")
+                        .HasForeignKey("RequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("FileInviteLite.Api.Domain.ChecklistItem", b =>
                 {
+                    b.Navigation("Decisions");
+
                     b.Navigation("Files");
                 });
 
@@ -284,6 +407,10 @@ namespace FileInviteLite.Api.Data.Migrations
                     b.Navigation("Items");
 
                     b.Navigation("MagicLinks");
+
+                    b.Navigation("Reminders");
+
+                    b.Navigation("WebhookDeliveries");
                 });
 #pragma warning restore 612, 618
         }

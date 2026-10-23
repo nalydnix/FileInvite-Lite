@@ -31,6 +31,8 @@ public sealed class DocumentRequest
 
     public List<ChecklistItem> Items { get; init; } = [];
     public List<MagicLink> MagicLinks { get; init; } = [];
+    public List<Reminder> Reminders { get; init; } = [];
+    public List<WebhookDelivery> WebhookDeliveries { get; init; } = [];
 
     /// <summary>
     /// The status rule from docs/spec.md, over <see cref="Items"/> (which must be loaded). The
